@@ -3,6 +3,11 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Button } from '@/components/Button';
+import { Input } from '@/components/Input';
+import { ImageUpload } from '@/components/ImageUpload';
+import { Alert } from '@/components/Alert';
+import { Card } from '@/components/Card';
 
 export default function DiagnosisPage() {
   const router = useRouter();
@@ -13,22 +18,6 @@ export default function DiagnosisPage() {
   const [uploading, setUploading] = useState(false);
   const [diagnosing, setDiagnosing] = useState(false);
   const [error, setError] = useState('');
-
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files);
-      if (files.length + images.length > 3) {
-        setError('画像は最大3枚までアップロードできます。');
-        return;
-      }
-      setImages([...images, ...files]);
-      setError('');
-    }
-  };
-
-  const removeImage = (index: number) => {
-    setImages(images.filter((_, i) => i !== index));
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -117,128 +106,59 @@ export default function DiagnosisPage() {
       <main className="container mx-auto px-4 py-8 max-w-2xl">
         <h1 className="text-3xl font-bold text-center mb-8">AI雨漏り診断</h1>
 
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-            {error}
-          </div>
-        )}
+        {error && <Alert type="error" className="mb-6">{error}</Alert>}
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6 space-y-6">
-          {/* お客様情報 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              お名前 <span className="text-red-500">*</span>
-            </label>
-            <input
+        <Card>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* お客様情報 */}
+            <Input
+              label="お名前"
               type="text"
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="山田太郎"
               required
             />
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              電話番号 <span className="text-red-500">*</span>
-            </label>
-            <input
+            <Input
+              label="電話番号"
               type="tel"
               value={customerPhone}
               onChange={(e) => setCustomerPhone(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="090-1234-5678"
               required
             />
-          </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              メールアドレス（任意）
-            </label>
-            <input
+            <Input
+              label="メールアドレス（任意）"
               type="email"
               value={customerEmail}
               onChange={(e) => setCustomerEmail(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="example@example.com"
             />
-          </div>
 
-          {/* 画像アップロード */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              雨漏り箇所の写真（3枚） <span className="text-red-500">*</span>
-            </label>
-            <p className="text-sm text-gray-500 mb-4">
-              雨漏り箇所を異なる角度から3枚撮影してください。
-            </p>
+            {/* 画像アップロード */}
+            <ImageUpload
+              maxImages={3}
+              images={images}
+              onImagesChange={setImages}
+            />
 
-            {images.length < 3 && (
-              <label className="block w-full border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-500 transition-colors">
-                <svg
-                  className="mx-auto h-12 w-12 text-gray-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"
-                  />
-                </svg>
-                <p className="mt-2 text-sm text-gray-600">
-                  クリックして画像を選択
-                </p>
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={handleImageChange}
-                  className="hidden"
-                />
-              </label>
-            )}
-
-            {/* プレビュー */}
-            {images.length > 0 && (
-              <div className="mt-4 grid grid-cols-3 gap-4">
-                {images.map((image, index) => (
-                  <div key={index} className="relative">
-                    <img
-                      src={URL.createObjectURL(image)}
-                      alt={`Preview ${index + 1}`}
-                      className="w-full h-32 object-cover rounded-lg"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeImage(index)}
-                      className="absolute top-2 right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600"
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* 送信ボタン */}
-          <button
-            type="submit"
-            disabled={uploading || diagnosing}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-          >
-            {uploading
-              ? '画像をアップロード中...'
-              : diagnosing
-              ? 'AI診断中...'
-              : '診断を開始'}
-          </button>
-        </form>
+            {/* 送信ボタン */}
+            <Button
+              type="submit"
+              disabled={uploading || diagnosing}
+              className="w-full"
+              size="lg"
+            >
+              {uploading
+                ? '画像をアップロード中...'
+                : diagnosing
+                ? 'AI診断中...'
+                : '診断を開始'}
+            </Button>
+          </form>
+        </Card>
 
         {/* 注意事項 */}
         <div className="mt-8 bg-blue-50 rounded-lg p-6">
