@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
     // ファイルをBufferに変換
     const arrayBuffer = await file.arrayBuffer();
-    let buffer = Buffer.from(arrayBuffer);
+    let buffer: Buffer | Uint8Array = Buffer.from(arrayBuffer);
 
     // HEIC形式の場合はJPEGに変換
     const mimeType = file.type;
@@ -30,7 +30,8 @@ export async function POST(request: NextRequest) {
 
     if (mimeType === 'image/heic' || mimeType === 'image/heif' || fileExtension === 'heic' || fileExtension === 'heif') {
       console.log('Converting HEIC to JPEG...');
-      buffer = await sharp(buffer as any).jpeg({ quality: 90 }).toBuffer();
+      const convertedBuffer = await sharp(buffer).jpeg({ quality: 90 }).toBuffer();
+      buffer = convertedBuffer;
       finalMimeType = 'image/jpeg';
       fileExtension = 'jpg';
     }
