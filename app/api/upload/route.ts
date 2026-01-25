@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
 
     if (mimeType === 'image/heic' || mimeType === 'image/heif' || fileExtension === 'heic' || fileExtension === 'heif') {
       console.log('Converting HEIC to JPEG...');
-      buffer = await sharp(buffer).jpeg({ quality: 90 }).toBuffer();
+      buffer = (await sharp(buffer as any).jpeg({ quality: 90 }).toBuffer()) as any;
       finalMimeType = 'image/jpeg';
       fileExtension = 'jpg';
     }
