@@ -1,20 +1,24 @@
 // @ts-nocheck
+/**
+ * app/api/diagnosis/route.ts
+ * AI雨漏り診断APIエンドポイント
+ * 
+ * サーバーサイドでのみ実行されるため、supabaseAdmin を使用
+ */
+
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
-import { createClient } from '@supabase/supabase-js';
+// ⚠️ 重要: サーバーサイド専用のクライアントをインポート
+import { supabaseAdmin } from '@/lib/supabase/server';
 
-// OpenAIとSupabaseの設定
+// OpenAIクライアントの初期化
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
 export async function POST(request: Request) {
   try {
-    // 【ここが修正点】FormDataではなく、JSONとして受け取る！
+    // リクエストボディをJSONとして受け取る
     const body = await request.json();
     const { customerName, customerPhone, customerEmail, imageUrls } = body;
 
@@ -30,7 +34,7 @@ export async function POST(request: Request) {
 
     // 1. OpenAI (GPT-5.1) に画像を見せて診断させる
     const response = await openai.chat.completions.create({
-      model: "gpt-5.1", // コスト最安＆最新モデル！
+      model: "gpt-5.1", // コスト最安＆最新モデル
       messages: [
         {
           role: "system",
@@ -52,7 +56,7 @@ export async function POST(request: Request) {
           content: [
             { type: "text", text: "これらの写真から雨漏りの状況を診断してください。" },
             ...imageUrls.map((url: string) => ({
-              type: "image_url",
+              type: "image_url" as const,
               image_url: { url: url }
             }))
           ]
@@ -68,8 +72,8 @@ export async function POST(request: Request) {
     // 2. 4桁の合言葉（パスコード）を生成
     const passcode = Math.floor(1000 + Math.random() * 9000).toString();
 
-    // 3. Supabaseにデータを保存
-    const { data: session, error: dbError } = await supabase
+    // 3. Supabaseにデータを保存（supabaseAdmin を使用）
+    const { data: session, error: dbError } = await supabaseAdmin
       .from('diagnosis_sessions')
       .insert({
         customer_name: customerName,
