@@ -5,20 +5,22 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 
+// データベースの実態に合わせた型定義
 interface DiagnosisSession {
   id: string;
-  secret_code: string;
+  passcode: string; // ここ重要！secret_codeじゃなくてpasscodeを使ってます
   customer_name: string;
-  damage_locations: string;
-  damage_description: string;
-  severity_score: number;
-  estimated_cost_min: number;
-  estimated_cost_max: number;
-  first_aid_cost: number;
-  insurance_likelihood: string;
-  recommended_plan: string;
   image_urls: string[];
   created_at: string;
+  // AIの結果はこのJSONの中に入ってる！
+  diagnosis_result: {
+    risk_level?: string;
+    estimated_cost_min?: number;
+    estimated_cost_max?: number;
+    repair_period?: string;
+    diagnosis_summary?: string;
+    urgent_action?: string;
+  };
 }
 
 export default function ResultPage() {
@@ -53,42 +55,26 @@ export default function ResultPage() {
     fetchSession();
   }, [id]);
 
-  const copySecretCode = () => {
-    if (session) {
-      navigator.clipboard.writeText(session.secret_code);
+  const copyPasscode = () => {
+    if (session?.passcode) {
+      navigator.clipboard.writeText(session.passcode);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     }
   };
 
-  const getInsuranceLikelihoodText = (likelihood: string) => {
-    switch (likelihood) {
-      case 'high':
-        return '高い';
-      case 'medium':
-        return '中程度';
-      case 'low':
-        return '低い';
-      case 'none':
-        return '該当なし';
-      default:
-        return '不明';
-    }
+  // AIの「高・中・低」を点数に変換するロジック
+  const getSeverityScore = (riskLevel: string = '') => {
+    if (riskLevel.includes('高')) return 9;
+    if (riskLevel.includes('中')) return 5;
+    if (riskLevel.includes('低')) return 2;
+    return 0; // 不明
   };
 
-  const getInsuranceLikelihoodColor = (likelihood: string) => {
-    switch (likelihood) {
-      case 'high':
-        return 'text-green-600';
-      case 'medium':
-        return 'text-yellow-600';
-      case 'low':
-        return 'text-orange-600';
-      case 'none':
-        return 'text-gray-600';
-      default:
-        return 'text-gray-600';
-    }
+  const getRiskColor = (riskLevel: string = '') => {
+    if (riskLevel.includes('高')) return 'text-red-600';
+    if (riskLevel.includes('中')) return 'text-yellow-600';
+    return 'text-blue-600';
   };
 
   if (loading) {
@@ -96,7 +82,7 @@ export default function ResultPage() {
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">診断結果を読み込み中...</p>
+          <p className="text-gray-600">診断結果を解析中...</p>
         </div>
       </div>
     );
@@ -120,7 +106,12 @@ export default function ResultPage() {
     );
   }
 
-  const isNotApplicable = session.insurance_likelihood === 'none';
+  // JSONからデータを取り出す（なければデフォルト値）
+  const result = session.diagnosis_result || {};
+  const riskLevel = result.risk_level || '不明';
+  const score = getSeverityScore(riskLevel);
+  const minCost = result.estimated_cost_min || 0;
+  const maxCost = result.estimated_cost_max || 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
@@ -138,23 +129,23 @@ export default function ResultPage() {
 
       {/* メインコンテンツ */}
       <main className="container mx-auto px-4 py-8 max-w-4xl">
-        <h1 className="text-3xl font-bold text-center mb-8">診断結果</h1>
+        <h1 className="text-3xl font-bold text-center mb-8">AI診断レポート</h1>
 
         {/* 合言葉カード */}
         <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg shadow-lg p-8 mb-8">
           <h2 className="text-2xl font-bold mb-4 text-center">
-            診断が完了しました！
+            診断完了！
           </h2>
           <p className="text-center mb-6">
-            詳細なPDFレポートを受け取るには、以下の合言葉をLINE公式アカウントに送信してください。
+            この合言葉をLINEで送ると、詳細なPDF見積もりが届きます。
           </p>
           <div className="bg-white text-gray-900 rounded-lg p-6 text-center">
-            <p className="text-sm text-gray-600 mb-2">合言葉（4桁）</p>
+            <p className="text-sm text-gray-600 mb-2">あなたの合言葉（4桁）</p>
             <p className="text-5xl font-bold tracking-wider mb-4">
-              {session.secret_code}
+              {session.passcode || '----'}
             </p>
             <button
-              onClick={copySecretCode}
+              onClick={copyPasscode}
               className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
             >
               {copied ? 'コピーしました！' : '合言葉をコピー'}
@@ -172,111 +163,91 @@ export default function ResultPage() {
           </div>
         </div>
 
-        {/* 診断結果カード */}
-        <div className="bg-white rounded-lg shadow-md p-8 space-y-6">
+        {/* 診断結果詳細 */}
+        <div className="bg-white rounded-lg shadow-md p-8 space-y-8">
           <h2 className="text-2xl font-bold border-b pb-4">診断概要</h2>
 
-          {/* 重症度 */}
+          {/* 重症度レベル */}
           <div>
-            <h3 className="font-bold text-lg mb-2">重症度スコア</h3>
-            <div className="flex items-center space-x-4">
-              <div className="text-4xl font-bold text-blue-600">
-                {session.severity_score}
+            <h3 className="font-bold text-lg mb-2">雨漏り危険度</h3>
+            <div className="flex items-end space-x-4">
+              <div className={`text-4xl font-bold ${getRiskColor(riskLevel)}`}>
+                {riskLevel}
               </div>
-              <div className="text-gray-600">/ 10</div>
+              <div className="text-gray-500 pb-1">
+                (深刻度スコア: {score} / 10)
+              </div>
             </div>
           </div>
 
-          {!isNotApplicable && (
-            <>
-              {/* 修繕箇所 */}
-              <div>
-                <h3 className="font-bold text-lg mb-2">修繕が必要な箇所</h3>
-                <p className="text-gray-700">{session.damage_locations}</p>
-              </div>
+          {/* 診断サマリー */}
+          <div>
+            <h3 className="font-bold text-lg mb-2">AIによる診断コメント</h3>
+            <div className="bg-gray-50 p-4 rounded-md text-gray-800 whitespace-pre-wrap leading-relaxed">
+              {result.diagnosis_summary || '詳細なコメントはありません。'}
+            </div>
+          </div>
 
-              {/* 損傷の説明 */}
-              <div>
-                <h3 className="font-bold text-lg mb-2">損傷の詳細</h3>
-                <p className="text-gray-700 whitespace-pre-wrap">
-                  {session.damage_description}
-                </p>
-              </div>
-
-              {/* 概算費用 */}
-              <div>
-                <h3 className="font-bold text-lg mb-2">概算修繕費用</h3>
-                <p className="text-2xl font-bold text-blue-600">
-                  ¥{session.estimated_cost_min.toLocaleString()} 〜 ¥
-                  {session.estimated_cost_max.toLocaleString()}
-                </p>
-              </div>
-
-              {/* 応急処置費用 */}
-              <div>
-                <h3 className="font-bold text-lg mb-2">応急処置の目安費用</h3>
-                <p className="text-2xl font-bold text-blue-600">
-                  ¥{session.first_aid_cost.toLocaleString()}
-                </p>
-              </div>
-
-              {/* 火災保険適用可能性 */}
-              <div>
-                <h3 className="font-bold text-lg mb-2">火災保険適用の可能性</h3>
-                <p
-                  className={`text-2xl font-bold ${getInsuranceLikelihoodColor(
-                    session.insurance_likelihood
-                  )}`}
-                >
-                  {getInsuranceLikelihoodText(session.insurance_likelihood)}
-                </p>
-              </div>
-
-              {/* 推奨プラン */}
-              <div>
-                <h3 className="font-bold text-lg mb-2">推奨プラン</h3>
-                <p className="text-gray-700">{session.recommended_plan}</p>
-              </div>
-            </>
-          )}
-
-          {isNotApplicable && (
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
-              <h3 className="font-bold text-lg mb-2 text-yellow-800">
-                該当なし
-              </h3>
-              <p className="text-gray-700 whitespace-pre-wrap">
-                {session.damage_description}
+          {/* 応急処置 */}
+          {result.urgent_action && (
+            <div>
+              <h3 className="font-bold text-lg mb-2 text-red-600">⚠️ 推奨される応急処置</h3>
+              <p className="text-gray-700 border-l-4 border-red-500 pl-4 py-2 bg-red-50">
+                {result.urgent_action}
               </p>
             </div>
           )}
 
+          {/* 概算費用 */}
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <h3 className="font-bold text-lg mb-2">概算修繕費用</h3>
+              <p className="text-3xl font-bold text-blue-600">
+                ¥{minCost.toLocaleString()} 〜 ¥{maxCost.toLocaleString()}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">※あくまでAIによる概算です。正確な金額は現地調査が必要です。</p>
+            </div>
+            
+            <div>
+              <h3 className="font-bold text-lg mb-2">工期の目安</h3>
+              <p className="text-xl font-medium text-gray-800">
+                {result.repair_period || '調査後に決定'}
+              </p>
+            </div>
+          </div>
+
           {/* アップロードされた画像 */}
           <div>
-            <h3 className="font-bold text-lg mb-4">アップロードされた画像</h3>
+            <h3 className="font-bold text-lg mb-4">解析した画像</h3>
             <div className="grid grid-cols-3 gap-4">
-              {session.image_urls.map((url, index) => (
-                <img
-                  key={index}
-                  src={url}
-                  alt={`診断画像 ${index + 1}`}
-                  className="w-full h-48 object-cover rounded-lg shadow-md"
-                />
+              {session.image_urls && session.image_urls.map((url, index) => (
+                <div key={index} className="relative aspect-square">
+                  <img
+                    src={url}
+                    alt={`診断画像 ${index + 1}`}
+                    className="w-full h-full object-cover rounded-lg shadow-md hover:opacity-90 transition-opacity"
+                  />
+                </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* 注意事項 */}
-        <div className="mt-8 bg-blue-50 rounded-lg p-6">
-          <h3 className="font-bold text-lg mb-2">次のステップ</h3>
-          <ol className="list-decimal list-inside space-y-2 text-sm text-gray-700">
+        {/* 次のアクション */}
+        <div className="mt-8 bg-blue-50 rounded-lg p-6 border border-blue-100">
+          <h3 className="font-bold text-lg mb-4 text-blue-900">今後の流れ</h3>
+          <ol className="list-decimal list-inside space-y-3 text-sm text-gray-700">
             <li>
-              上記の合言葉をLINE公式アカウントに送信してください。
+              上記の<span className="font-bold text-blue-600">4桁の合言葉</span>をコピーしてください。
             </li>
-            <li>詳細なPDFレポートが自動的に送信されます。</li>
             <li>
-              PDFレポートを確認後、現地調査のご依頼をお待ちしております。
+              「LINE公式アカウントを開く」ボタンを押して、合言葉を送信してください。
+            </li>
+            <li>
+              AIが作成した詳細なPDFレポートがすぐに返信されます。
+            </li>
+            <li>
+              レポートを確認後、そのままLINEで現地調査の日程をご相談いただけます。
             </li>
           </ol>
         </div>
