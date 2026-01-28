@@ -1,18 +1,8 @@
 // @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+// ⚠️ 重要: サーバーサイド専用のクライアントをインポート
+import { supabaseAdmin } from '@/lib/supabase/server';
 import sharp from 'sharp';
-
-// Supabaseの設定
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
-  auth: {
-    autoRefreshToken: false,
-    persistSession: false
-  }
-});
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,15 +10,20 @@ export async function POST(request: NextRequest) {
     const file = formData.get('file') as File;
 
     if (!file) {
+      return NextResponse.json({ error: 'ファイルが選択されていません。' }, { status: 400 });
+    }
+
+    // ファイルサイズチェック（16MB以下）
+    if (file.size > 16 * 1024 * 1024) {
       return NextResponse.json(
-        { error: 'ファイルがアップロードされていません。' },
+        { error: 'ファイルサイズが大きすぎます。16MB以下のファイルを選択してください。' },
         { status: 400 }
       );
     }
 
-    // ファイルをBufferに変換
+    // ファイルをBufferに変換（any型で型エラーを回避）
     const arrayBuffer = await file.arrayBuffer();
-    // 型エラー回避のための any キャスト
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let buffer: any = Buffer.from(arrayBuffer);
 
     // HEIC形式の場合はJPEGに変換
@@ -38,16 +33,15 @@ export async function POST(request: NextRequest) {
 
     if (mimeType === 'image/heic' || mimeType === 'image/heif' || fileExtension === 'heic' || fileExtension === 'heif') {
       console.log('Converting HEIC to JPEG...');
-      // ここで型エラーを完全無視して変換
-      buffer = (await sharp(buffer as any).jpeg({ quality: 90 }).toBuffer()) as any;
+      buffer = await sharp(buffer).jpeg({ quality: 90 }).toBuffer();
       finalMimeType = 'image/jpeg';
       fileExtension = 'jpg';
     }
 
-    // ファイル名を生成
+    // ファイル名を生成（ランダムUUID + 拡張子）
     const fileName = `${crypto.randomUUID()}.${fileExtension}`;
 
-    // Supabase Storageにアップロード
+    // Supabase Storageにアップロード（supabaseAdmin を使用）
     const { data, error } = await supabaseAdmin.storage
       .from('images')
       .upload(fileName, buffer, {
@@ -64,19 +58,17 @@ export async function POST(request: NextRequest) {
     }
 
     // 公開URLを取得
-    const { data: publicUrlData } = supabaseAdmin.storage
-      .from('images')
-      .getPublicUrl(fileName);
+    const { data: urlData } = supabaseAdmin.storage.from('images').getPublicUrl(fileName);
 
-    return NextResponse.json({ 
-      url: publicUrlData.publicUrl,
-      fileName: fileName 
+    return NextResponse.json({
+      success: true,
+      url: urlData.publicUrl,
+      fileName,
     });
-
   } catch (error) {
-    console.error('Upload error:', error);
+    console.error('Error in upload API:', error);
     return NextResponse.json(
-      { error: 'サーバー内部エラーが発生しました。' },
+      { error: 'アップロード中にエラーが発生しました。' },
       { status: 500 }
     );
   }
