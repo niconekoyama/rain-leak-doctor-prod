@@ -1,15 +1,13 @@
-// @ts-nocheck
 /**
  * app/api/diagnosis/route.ts
  * AI雨漏り診断APIエンドポイント
  * 
  * サーバーサイドでのみ実行されるため、supabaseAdmin を使用
  */
-
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 // ⚠️ 重要: サーバーサイド専用のクライアントをインポート
-import { supabaseAdmin } from '@/lib/supabase/server';
+import { getSupabaseAdmin } from '@/lib/supabase/server';
 
 // OpenAIクライアントの初期化
 const openai = new OpenAI({
@@ -34,7 +32,7 @@ export async function POST(request: Request) {
 
     // 1. OpenAI (GPT-5.1) に画像を見せて診断させる
     const response = await openai.chat.completions.create({
-      model: "gpt-5.1", // コスト最安＆最新モデル
+      model: "gpt-5.1",
       messages: [
         {
           role: "system",
@@ -72,7 +70,8 @@ export async function POST(request: Request) {
     // 2. 4桁の合言葉（パスコード）を生成
     const passcode = Math.floor(1000 + Math.random() * 9000).toString();
 
-    // 3. Supabaseにデータを保存（supabaseAdmin を使用）
+    // 3. Supabaseにデータを保存（getSupabaseAdmin() で取得）
+    const supabaseAdmin = getSupabaseAdmin();
     const { data: session, error: dbError } = await supabaseAdmin
       .from('diagnosis_sessions')
       .insert({
