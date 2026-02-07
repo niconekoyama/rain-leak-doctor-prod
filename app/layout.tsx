@@ -3,10 +3,7 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'AI雨漏りドクター',
-  description: 'AI診断と職人技術で損しない雨漏り修繕をご提案するサービス',
-  icons: {
-    icon: '/favicon.svg',
-  },
+  description: 'AIが3分で雨漏りを診断。写真を撮るだけで、重症度・概算費用・火災保険の適用可能性を即座に判定します。',
 };
 
 export default function RootLayout({
