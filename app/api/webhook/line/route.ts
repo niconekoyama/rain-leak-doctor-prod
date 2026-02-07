@@ -1,6 +1,12 @@
+/**
+ * app/api/webhook/line/route.ts
+ * LINE Webhookエンドポイント
+ * 
+ * サーバーサイドで実行 → supabaseAdmin を server.ts からインポート
+ */
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { supabaseAdmin } from '@/lib/supabase/server';
+import { getSupabaseAdmin } from '@/lib/supabase/server';
 
 const LINE_CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET!;
 const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN!;
@@ -26,10 +32,7 @@ async function sendLineMessage(replyToken: string, messages: any[]) {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
     },
-    body: JSON.stringify({
-      replyToken,
-      messages,
-    }),
+    body: JSON.stringify({ replyToken, messages }),
   });
 
   if (!response.ok) {
@@ -54,6 +57,7 @@ function toHalfWidth(str: string): string {
  * 4桁の合言葉を検索（全角・半角対応）
  */
 async function findSessionBySecretCode(code: string) {
+  const supabaseAdmin = getSupabaseAdmin();
   const normalizedCode = toHalfWidth(code.trim());
 
   // まず4桁コードで検索
@@ -100,24 +104,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No signature' }, { status: 400 });
     }
 
-    // 署名を検証
     if (!validateLineSignature(body, signature)) {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
     }
 
     const data = JSON.parse(body);
     const events = data.events || [];
+    const supabaseAdmin = getSupabaseAdmin();
 
     for (const event of events) {
       if (event.type === 'message' && event.message.type === 'text') {
         const userMessage = event.message.text;
         const replyToken = event.replyToken;
 
-        // 4桁の合言葉を検索
         const session = await findSessionBySecretCode(userMessage);
 
         if (!session) {
-          // 合言葉が見つからない場合
           await sendLineMessage(replyToken, [
             {
               type: 'text',
@@ -127,7 +129,6 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // リトライ回数をチェック
         if (session.retry_count >= 5) {
           await sendLineMessage(replyToken, [
             {
@@ -153,8 +154,12 @@ export async function POST(request: NextRequest) {
           messageText += `重症度: ${session.severity_score}/10\n\n`;
 
           if (!isNotApplicable) {
-            messageText += `応急処置の目安: ¥${session.first_aid_cost.toLocaleString()}\n`;
-            messageText += `本復旧の目安: ¥${session.estimated_cost_min.toLocaleString()} 〜 ¥${session.estimated_cost_max.toLocaleString()}\n\n`;
+            if (session.first_aid_cost) {
+              messageText += `応急処置の目安: ¥${Number(session.first_aid_cost).toLocaleString()}\n`;
+            }
+            if (session.estimated_cost_min && session.estimated_cost_max) {
+              messageText += `本復旧の目安: ¥${Number(session.estimated_cost_min).toLocaleString()} 〜 ¥${Number(session.estimated_cost_max).toLocaleString()}\n\n`;
+            }
             messageText += `詳細なレポートは以下のPDFをご確認ください。`;
           } else {
             messageText += `該当なし: 建物の損傷や雨漏りの痕跡が確認できませんでした。\n\n`;
@@ -162,14 +167,8 @@ export async function POST(request: NextRequest) {
           }
 
           await sendLineMessage(replyToken, [
-            {
-              type: 'text',
-              text: messageText,
-            },
-            {
-              type: 'text',
-              text: session.pdf_url,
-            },
+            { type: 'text', text: messageText },
+            { type: 'text', text: session.pdf_url },
           ]);
         } else {
           await sendLineMessage(replyToken, [
