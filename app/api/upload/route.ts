@@ -1,7 +1,11 @@
-// @ts-nocheck
+/**
+ * app/api/upload/route.ts
+ * 画像アップロードAPI
+ * 
+ * サーバーサイドで実行 → supabaseAdmin を server.ts からインポート
+ */
 import { NextRequest, NextResponse } from 'next/server';
-// ⚠️ 重要: サーバーサイド専用のクライアントをインポート
-import { supabaseAdmin } from '@/lib/supabase/server';
+import { getSupabaseAdmin } from '@/lib/supabase/server';
 import sharp from 'sharp';
 
 export async function POST(request: NextRequest) {
@@ -21,10 +25,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ファイルをBufferに変換（any型で型エラーを回避）
     const arrayBuffer = await file.arrayBuffer();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let buffer: any = Buffer.from(arrayBuffer);
+    let buffer: Buffer = Buffer.from(arrayBuffer);
 
     // HEIC形式の場合はJPEGに変換
     const mimeType = file.type;
@@ -38,10 +40,10 @@ export async function POST(request: NextRequest) {
       fileExtension = 'jpg';
     }
 
-    // ファイル名を生成（ランダムUUID + 拡張子）
     const fileName = `${crypto.randomUUID()}.${fileExtension}`;
 
-    // Supabase Storageにアップロード（supabaseAdmin を使用）
+    // Supabase Storageにアップロード
+    const supabaseAdmin = getSupabaseAdmin();
     const { data, error } = await supabaseAdmin.storage
       .from('images')
       .upload(fileName, buffer, {
