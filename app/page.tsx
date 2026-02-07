@@ -1,372 +1,241 @@
-/**
- * app/result/[id]/page.tsx
- * 診断結果表示ページ
- * 
- * クライアントコンポーネントのため、ブラウザ用のsupabaseを使用
- * データの欠損やnull/undefinedに対して堅牢に設計
- */
-
-'use client';
-
-import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
 import Link from 'next/link';
-// ⚠️ 重要: ブラウザ用のクライアントを関数でインポート（遅延初期化）
-import { getSupabase } from '@/lib/supabase/client';
 
-// 型定義（どんなデータが来ても受け止められるようにOptionalにする）
-interface DiagnosisResult {
-  risk_level?: string;
-  estimated_cost_min?: number;
-  estimated_cost_max?: number;
-  repair_period?: string;
-  diagnosis_summary?: string;
-  urgent_action?: string;
-  // 旧フォーマット対応
-  damage_locations?: string;
-  damage_description?: string;
-  damageLocations?: string;
-  damageDescription?: string;
-  severityScore?: number;
-  estimatedCostMin?: number;
-  estimatedCostMax?: number;
-  firstAidCost?: number;
-  insuranceLikelihood?: string;
-  recommendedPlan?: string;
-}
-
-interface DiagnosisSession {
-  id: string;
-  // 合言葉: passcode を優先、secret_code もフォールバック
-  passcode?: string;
-  secret_code?: string;
-  customer_name?: string;
-  image_urls?: string[] | string | null;
-  created_at?: string;
-  diagnosis_result?: DiagnosisResult | string | null;
-  // カラムとして直接持ってる場合用
-  damage_locations?: string;
-  damage_description?: string;
-  severity_score?: number;
-  estimated_cost_min?: number;
-  estimated_cost_max?: number;
-  first_aid_cost?: number;
-  insurance_likelihood?: string;
-  recommended_plan?: string;
-  status?: string;
-}
-
-// 安全にJSONをパースするヘルパー関数
-function safeParseJSON<T>(value: unknown, fallback: T): T {
-  if (value === null || value === undefined) {
-    return fallback;
-  }
-  if (typeof value === 'object') {
-    return value as T;
-  }
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value) as T;
-    } catch {
-      return fallback;
-    }
-  }
-  return fallback;
-}
-
-// 安全に配列を取得するヘルパー関数
-function safeGetArray(value: unknown): string[] {
-  if (Array.isArray(value)) {
-    return value;
-  }
-  if (typeof value === 'string') {
-    try {
-      const parsed = JSON.parse(value);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
-
-export default function ResultPage() {
-  const params = useParams();
-  const id = params?.id as string;
-  const [session, setSession] = useState<DiagnosisSession | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [copied, setCopied] = useState(false);
-  const [initError, setInitError] = useState(false);
-
-  useEffect(() => {
-    async function fetchSession() {
-      // IDがない場合は早期リターン
-      if (!id) {
-        setErrorMsg('セッションIDが指定されていません。');
-        setLoading(false);
-        return;
-      }
-
-      try {
-        // Supabaseクライアントを取得（遅延初期化）
-        let supabase;
-        try {
-          supabase = getSupabase();
-        } catch (e) {
-          console.error('Supabase初期化エラー:', e);
-          setInitError(true);
-          setErrorMsg('システムの初期化に失敗しました。しばらく経ってから再度お試しください。');
-          setLoading(false);
-          return;
-        }
-
-        console.log('Fetching session for ID:', id);
-        
-        const { data, error } = await supabase
-          .from('diagnosis_sessions')
-          .select('*')
-          .eq('id', id)
-          .single();
-
-        if (error) {
-          console.error('Supabase Error:', error);
-          setErrorMsg('データの取得に失敗しました。');
-          return;
-        }
-
-        if (!data) {
-          setErrorMsg('診断データが見つかりませんでした。');
-          return;
-        }
-
-        console.log('Fetched Data:', data);
-        setSession(data as DiagnosisSession);
-      } catch (err) {
-        console.error('Unexpected Error:', err);
-        setErrorMsg('予期せぬエラーが発生しました。');
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchSession();
-  }, [id]);
-
-  // 合言葉をコピー
-  const copyPasscode = () => {
-    // passcode を優先、なければ secret_code を使用
-    const code = session?.passcode || session?.secret_code || '----';
-    navigator.clipboard.writeText(code).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }).catch((err) => {
-      console.error('コピーに失敗:', err);
-    });
-  };
-
-  // リスクレベルに応じた色を返す
-  const getRiskColor = (riskLevel: string = '') => {
-    const level = riskLevel.toLowerCase();
-    if (level.includes('高') || level.includes('high') || level.includes('危険')) {
-      return 'text-red-600';
-    }
-    if (level.includes('中') || level.includes('medium') || level.includes('注意')) {
-      return 'text-yellow-600';
-    }
-    return 'text-blue-600';
-  };
-
-  // ローディング中
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">診断結果を読み込んでいます...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // エラー発生時
-  if (errorMsg || !session) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center p-6 bg-white rounded-lg shadow max-w-md">
-          <h1 className="text-xl font-bold text-red-600 mb-2">エラー</h1>
-          <p className="text-gray-700 mb-4">{errorMsg || 'データが見つかりませんでした。'}</p>
-          {initError && (
-            <p className="text-sm text-gray-500 mb-4">
-              環境設定に問題がある可能性があります。管理者にお問い合わせください。
-            </p>
-          )}
-          <Link href="/" className="text-blue-600 underline hover:text-blue-800">
-            ホームに戻る
-          </Link>
-        </div>
-      </div>
-    );
-  }
-
-  // ===== 安全にデータを取り出す（ここがクラッシュ防止の肝！）=====
-  
-  // diagnosis_result をパース（文字列の場合もあるので安全に処理）
-  const result = safeParseJSON<DiagnosisResult>(session.diagnosis_result, {});
-  
-  // 合言葉: passcode を優先、なければ secret_code
-  const displayPasscode = session.passcode || session.secret_code || '----';
-  
-  // リスクレベル
-  const riskLevel = result.risk_level || '判定中';
-  
-  // 費用（複数のフォーマットに対応）
-  const minCost = 
-    result.estimated_cost_min ?? 
-    result.estimatedCostMin ?? 
-    session.estimated_cost_min ?? 
-    0;
-  const maxCost = 
-    result.estimated_cost_max ?? 
-    result.estimatedCostMax ?? 
-    session.estimated_cost_max ?? 
-    0;
-  
-  // 診断サマリー（複数のフォーマットに対応）
-  const summary = 
-    result.diagnosis_summary || 
-    result.damage_description || 
-    result.damageDescription ||
-    session.damage_description || 
-    '詳細な診断結果はLINEでお送りします。';
-  
-  // 応急処置
-  const urgent = result.urgent_action || '';
-  
-  // 工期
-  const period = result.repair_period || '要相談';
-  
-  // 画像リスト（配列じゃない場合に備えて安全に処理）
-  const images = safeGetArray(session.image_urls);
-
+export default function Home() {
   return (
-    <div className="min-h-screen bg-gray-50 pb-12">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       {/* ヘッダー */}
-      <header className="bg-white shadow-sm p-4 mb-6">
-        <div className="container mx-auto max-w-4xl">
-          <Link href="/" className="font-bold text-blue-600 text-xl hover:text-blue-800">
-            雨漏りドクター
-          </Link>
+      <header className="bg-white shadow-sm sticky top-0 z-50">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
+              <span className="text-white font-bold text-xl">雨</span>
+            </div>
+            <span className="text-2xl font-bold text-blue-600">雨漏りドクター</span>
+          </div>
+          <nav className="hidden md:flex space-x-6">
+            <a href="#features" className="text-gray-600 hover:text-blue-600">
+              サービス
+            </a>
+            <a href="#how-it-works" className="text-gray-600 hover:text-blue-600">
+              診断の流れ
+            </a>
+            <a href="#stats" className="text-gray-600 hover:text-blue-600">
+              実績
+            </a>
+          </nav>
         </div>
       </header>
 
-      <main className="container mx-auto max-w-4xl px-4">
-        {/* 合言葉エリア */}
-        <div className="bg-blue-600 text-white rounded-xl p-8 shadow-lg mb-8 text-center">
-          <h2 className="text-2xl font-bold mb-4">診断完了</h2>
-          <p className="mb-6">この合言葉をLINEで送ってください。</p>
-          
-          <div className="bg-white text-gray-900 rounded-lg p-6 max-w-md mx-auto">
-            <p className="text-sm text-gray-500 mb-2">あなたの合言葉</p>
-            <p className="text-4xl font-bold tracking-widest mb-4 font-mono">
-              {displayPasscode}
-            </p>
-            <button 
-              onClick={copyPasscode}
-              className="bg-blue-100 text-blue-700 px-6 py-2 rounded-full font-bold hover:bg-blue-200 transition"
-            >
-              {copied ? 'コピー完了！' : '合言葉をコピー'}
-            </button>
-          </div>
-          
-          <div className="mt-6">
-            <a
-              href="https://lin.ee/LTMUhxy"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block bg-green-500 text-white font-bold py-3 px-8 rounded-full hover:bg-green-600 transition shadow-md"
-            >
-              LINEを開く
-            </a>
-          </div>
-        </div>
-
-        {/* 診断詳細エリア */}
-        <div className="bg-white rounded-xl shadow p-6 md:p-8 space-y-8">
-          <div>
-            <h3 className="text-lg font-bold text-gray-700 border-b pb-2 mb-4">診断結果概要</h3>
-            <div className="flex items-center gap-4 mb-4">
-              <span className="text-gray-600">危険度判定：</span>
-              <span className={`text-3xl font-bold ${getRiskColor(riskLevel)}`}>
-                {riskLevel}
-              </span>
-            </div>
-            <div className="bg-gray-50 p-4 rounded text-gray-800 leading-relaxed">
-              {summary}
-            </div>
-          </div>
-
-          {urgent && (
-            <div className="border-l-4 border-red-500 bg-red-50 p-4">
-              <h4 className="font-bold text-red-700 mb-1">⚠️ 推奨される応急処置</h4>
-              <p className="text-gray-800">{urgent}</p>
-            </div>
-          )}
-
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="bg-blue-50 p-4 rounded">
-              <h4 className="font-bold text-blue-800 mb-1">概算費用</h4>
-              <p className="text-2xl font-bold text-blue-600">
-                {minCost > 0 || maxCost > 0 
-                  ? `¥${minCost.toLocaleString()} 〜 ¥${maxCost.toLocaleString()}`
-                  : '要見積もり'
-                }
-              </p>
-            </div>
-            <div className="bg-gray-100 p-4 rounded">
-              <h4 className="font-bold text-gray-700 mb-1">工期目安</h4>
-              <p className="text-xl font-medium">{period}</p>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-lg font-bold text-gray-700 mb-4">解析画像</h3>
-            {images.length > 0 ? (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {images.map((url, i) => (
-                  <div key={i} className="aspect-square bg-gray-200 rounded overflow-hidden">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img 
-                      src={url} 
-                      alt={`診断画像 ${i + 1}`} 
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        // 画像読み込みエラー時のフォールバック
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = 'none';
-                      }}
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-gray-500 bg-gray-100 p-4 rounded text-center">
-                画像データがありません
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* フッターリンク */}
-        <div className="mt-8 text-center">
-          <Link 
-            href="/" 
-            className="text-blue-600 underline hover:text-blue-800"
+      {/* ヒーローセクション */}
+      <section className="container mx-auto px-4 py-16 md:py-24">
+        <div className="max-w-4xl mx-auto text-center">
+          <h1 className="text-4xl md:text-6xl font-bold text-gray-900 mb-6">
+            AI診断と職人技術で
+            <br />
+            <span className="text-blue-600">損しない雨漏り修繕</span>
+          </h1>
+          <p className="text-xl text-gray-600 mb-8">
+            写真を撮るだけで、AIが3分で診断。
+            <br />
+            火災保険の適用可能性も即座に判定します。
+          </p>
+          <Link
+            href="/diagnosis"
+            className="inline-block bg-blue-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-blue-700 transition-colors shadow-lg"
           >
-            ← ホームに戻る
+            無料AI診断を始める
           </Link>
         </div>
-      </main>
+      </section>
+
+      {/* 統計セクション */}
+      <section id="stats" className="bg-blue-600 text-white py-16">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+            <div>
+              <div className="text-4xl md:text-5xl font-bold mb-2">1,247</div>
+              <div className="text-blue-100">診断実績</div>
+            </div>
+            <div>
+              <div className="text-4xl md:text-5xl font-bold mb-2">57分</div>
+              <div className="text-blue-100">平均診断時間</div>
+            </div>
+            <div>
+              <div className="text-4xl md:text-5xl font-bold mb-2">12社</div>
+              <div className="text-blue-100">提携工務店</div>
+            </div>
+            <div>
+              <div className="text-4xl md:text-5xl font-bold mb-2">4.8</div>
+              <div className="text-blue-100">顧客満足度</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* サービス特徴 */}
+      <section id="features" className="container mx-auto px-4 py-16">
+        <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">
+          雨漏りドクターの特徴
+        </h2>
+        <div className="grid md:grid-cols-3 gap-8">
+          <div className="bg-white p-8 rounded-lg shadow-md">
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+              <svg
+                className="w-8 h-8 text-blue-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                />
+              </svg>
+            </div>
+            <h3 className="text-xl font-bold mb-2">AI 3分診断</h3>
+            <p className="text-gray-600">
+              写真を撮るだけで、AIが即座に診断。概算費用と重症度を判定します。
+            </p>
+          </div>
+
+          <div className="bg-white p-8 rounded-lg shadow-md">
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+              <svg
+                className="w-8 h-8 text-blue-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                />
+              </svg>
+            </div>
+            <h3 className="text-xl font-bold mb-2">火災保険適用判定</h3>
+            <p className="text-gray-600">
+              火災保険の適用可能性を即座に判定。申請サポートも行います。
+            </p>
+          </div>
+
+          <div className="bg-white p-8 rounded-lg shadow-md">
+            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+              <svg
+                className="w-8 h-8 text-blue-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"
+                />
+              </svg>
+            </div>
+            <h3 className="text-xl font-bold mb-2">職人のダブルチェック</h3>
+            <p className="text-gray-600">
+              AIの診断結果を経験豊富な職人が確認。正確な見積もりを提供します。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* 診断の流れ */}
+      <section id="how-it-works" className="bg-gray-50 py-16">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">
+            診断の流れ
+          </h2>
+          <div className="max-w-3xl mx-auto space-y-8">
+            <div className="flex items-start space-x-4">
+              <div className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">
+                1
+              </div>
+              <div>
+                <h3 className="text-xl font-bold mb-2">写真を撮影</h3>
+                <p className="text-gray-600">
+                  雨漏り箇所の写真を3枚撮影してアップロードします。
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start space-x-4">
+              <div className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">
+                2
+              </div>
+              <div>
+                <h3 className="text-xl font-bold mb-2">AI診断</h3>
+                <p className="text-gray-600">
+                  AIが写真を分析し、重症度、概算費用、火災保険の適用可能性を判定します。
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start space-x-4">
+              <div className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">
+                3
+              </div>
+              <div>
+                <h3 className="text-xl font-bold mb-2">合言葉を取得</h3>
+                <p className="text-gray-600">
+                  診断完了後、4桁の合言葉が発行されます。
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start space-x-4">
+              <div className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold flex-shrink-0">
+                4
+              </div>
+              <div>
+                <h3 className="text-xl font-bold mb-2">LINEでPDF受信</h3>
+                <p className="text-gray-600">
+                  LINE公式アカウントに合言葉を送信すると、詳細なPDFレポートが届きます。
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section className="container mx-auto px-4 py-16 text-center">
+        <h2 className="text-3xl md:text-4xl font-bold mb-6">
+          まずは無料診断から始めましょう
+        </h2>
+        <p className="text-xl text-gray-600 mb-8">
+          写真を撮るだけで、3分で診断結果が分かります。
+        </p>
+        <Link
+          href="/diagnosis"
+          className="inline-block bg-blue-600 text-white px-8 py-4 rounded-lg text-lg font-semibold hover:bg-blue-700 transition-colors shadow-lg"
+        >
+          無料AI診断を始める
+        </Link>
+      </section>
+
+      {/* フッター */}
+      <footer className="bg-gray-900 text-white py-8">
+        <div className="container mx-auto px-4 text-center">
+          <p className="text-gray-400">
+            &copy; 2024 雨漏りドクター. All rights reserved.
+          </p>
+          <div className="mt-4 space-x-4">
+            <Link href="/privacy" className="text-gray-400 hover:text-white">
+              プライバシーポリシー
+            </Link>
+            <Link href="/terms" className="text-gray-400 hover:text-white">
+              特定商取引法に基づく表記
+            </Link>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
