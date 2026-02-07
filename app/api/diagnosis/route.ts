@@ -2,104 +2,126 @@
  * app/api/diagnosis/route.ts
  * AI雨漏り診断APIエンドポイント
  * 
- * サーバーサイドでのみ実行されるため、supabaseAdmin を使用
+ * 1. OpenAI Vision APIで画像を分析
+ * 2. 4桁の合言葉を生成
+ * 3. Supabaseに診断結果を保存
+ * 4. PDFを生成してStorageにアップロード
+ * 5. セッションIDと合言葉を返す
  */
-import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
-// ⚠️ 重要: サーバーサイド専用のクライアントをインポート
+import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
+import { generateUniqueSecretCode } from '@/lib/supabase/secret-code';
+import { performAIDiagnosis } from '@/lib/openai/diagnosis';
+import { generatePDF } from '@/lib/pdf/generator';
 
-// OpenAIクライアントの初期化
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    // リクエストボディをJSONとして受け取る
     const body = await request.json();
     const { customerName, customerPhone, customerEmail, imageUrls } = body;
 
-    console.log('診断開始:', { customerName, imageUrls });
-
-    // 画像がない場合はエラー
-    if (!imageUrls || imageUrls.length === 0) {
+    // バリデーション
+    if (!customerName || !customerPhone || !imageUrls || imageUrls.length === 0) {
       return NextResponse.json(
-        { error: '画像がアップロードされていません。' },
+        { error: '必須項目が入力されていません。' },
         { status: 400 }
       );
     }
 
-    // 1. OpenAI (GPT-5.1) に画像を見せて診断させる
-    const response = await openai.chat.completions.create({
-      model: "gpt-5.1",
-      messages: [
-        {
-          role: "system",
-          content: `あなたはプロの雨漏り診断士です。ユーザーから提供された写真をもとに、以下の項目を出力してください。
-          必ずJSON形式で出力してください。
-          
-          出力フォーマット:
-          {
-            "risk_level": "高" | "中" | "低",
-            "estimated_cost_min": 数値（円）,
-            "estimated_cost_max": 数値（円）,
-            "repair_period": "文字列（例: 3日〜1週間）",
-            "diagnosis_summary": "診断結果の要約（200文字程度）",
-            "urgent_action": "今すぐやるべき応急処置"
-          }`
-        },
-        {
-          role: "user",
-          content: [
-            { type: "text", text: "これらの写真から雨漏りの状況を診断してください。" },
-            ...imageUrls.map((url: string) => ({
-              type: "image_url" as const,
-              image_url: { url: url }
-            }))
-          ]
-        }
-      ],
-      response_format: { type: "json_object" },
-    });
+    if (imageUrls.length !== 3) {
+      return NextResponse.json(
+        { error: '画像は3枚アップロードしてください。' },
+        { status: 400 }
+      );
+    }
 
-    // AIの回答を取り出す
-    const aiContent = response.choices[0].message.content;
-    const diagnosisResult = JSON.parse(aiContent || '{}');
+    // 1. AI診断実行
+    console.log('Performing AI diagnosis...');
+    const diagnosisResult = await performAIDiagnosis(imageUrls);
 
-    // 2. 4桁の合言葉（パスコード）を生成
-    const passcode = Math.floor(1000 + Math.random() * 9000).toString();
+    // 2. 4桁の合言葉を生成（衝突しないユニークなコード）
+    const secretCode = await generateUniqueSecretCode();
 
-    // 3. Supabaseにデータを保存（getSupabaseAdmin() で取得）
+    // 3. 有効期限を設定（24時間後）
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24);
+
+    // 4. 診断セッションをデータベースに保存
     const supabaseAdmin = getSupabaseAdmin();
-    const { data: session, error: dbError } = await supabaseAdmin
+    const { data: session, error: insertError } = await supabaseAdmin
       .from('diagnosis_sessions')
       .insert({
+        secret_code: secretCode,
         customer_name: customerName,
         customer_phone: customerPhone,
-        customer_email: customerEmail,
+        customer_email: customerEmail || null,
+        damage_locations: diagnosisResult.damageLocations,
+        damage_description: diagnosisResult.damageDescription,
+        severity_score: diagnosisResult.severityScore,
+        estimated_cost_min: diagnosisResult.estimatedCostMin,
+        estimated_cost_max: diagnosisResult.estimatedCostMax,
+        first_aid_cost: diagnosisResult.firstAidCost,
+        insurance_likelihood: diagnosisResult.insuranceLikelihood,
+        recommended_plan: diagnosisResult.recommendedPlan,
         image_urls: imageUrls,
-        diagnosis_result: diagnosisResult,
-        passcode: passcode,
-        status: 'completed'
+        expires_at: expiresAt.toISOString(),
       })
       .select()
       .single();
 
-    if (dbError) {
-      console.error('DB Error:', dbError);
-      throw new Error('データの保存に失敗しました');
+    if (insertError) {
+      console.error('Error inserting diagnosis session:', insertError);
+      return NextResponse.json(
+        { error: '診断結果の保存に失敗しました。' },
+        { status: 500 }
+      );
     }
 
-    // 4. 成功！セッションIDを返す
+    // 5. PDFを生成してSupabase Storageにアップロード
+    console.log('Generating PDF...');
+    try {
+      const pdfBuffer = await generatePDF({
+        customerName,
+        diagnosisId: session.id,
+        ...diagnosisResult,
+        imageUrls,
+      });
+
+      const pdfFileName = `diagnosis_${session.id}.pdf`;
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from('pdfs')
+        .upload(pdfFileName, pdfBuffer, {
+          contentType: 'application/pdf',
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error('Error uploading PDF:', uploadError);
+        // PDF失敗は致命的ではない（後でリトライ可能）
+      } else {
+        // PDF URLを取得してセッションに保存
+        const { data: pdfUrlData } = supabaseAdmin.storage
+          .from('pdfs')
+          .getPublicUrl(pdfFileName);
+
+        await supabaseAdmin
+          .from('diagnosis_sessions')
+          .update({ pdf_url: pdfUrlData.publicUrl })
+          .eq('id', session.id);
+      }
+    } catch (pdfError) {
+      console.error('PDF generation error (non-fatal):', pdfError);
+      // PDF生成失敗は致命的ではない
+    }
+
+    // 6. 成功レスポンス
     return NextResponse.json({
       success: true,
       sessionId: session.id,
-      passcode: passcode
+      secretCode,
+      diagnosisResult,
     });
-
   } catch (error) {
-    console.error('Diagnosis Error:', error);
+    console.error('Error in diagnosis API:', error);
     return NextResponse.json(
       { error: '診断中にエラーが発生しました。' },
       { status: 500 }
