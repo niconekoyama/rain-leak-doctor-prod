@@ -1,76 +1,129 @@
 /**
- * app/api/upload/route.ts
- * 画像アップロードAPI
+ * app/api/diagnosis/route.ts
+ * AI雨漏り診断APIエンドポイント
  * 
- * サーバーサイドで実行 → supabaseAdmin を server.ts からインポート
+ * 1. OpenAI Vision APIで画像を分析
+ * 2. 4桁の合言葉を生成
+ * 3. Supabaseに診断結果を保存
+ * 4. PDFを生成してStorageにアップロード
+ * 5. セッションIDと合言葉を返す
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
-import sharp from 'sharp';
+import { generateUniqueSecretCode } from '@/lib/supabase/secret-code';
+import { performAIDiagnosis } from '@/lib/openai/diagnosis';
+import { generatePDF } from '@/lib/pdf/generator';
 
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
-    const file = formData.get('file') as File;
+    const body = await request.json();
+    const { customerName, customerPhone, customerEmail, imageUrls } = body;
 
-    if (!file) {
-      return NextResponse.json({ error: 'ファイルが選択されていません。' }, { status: 400 });
-    }
-
-    // ファイルサイズチェック（16MB以下）
-    if (file.size > 16 * 1024 * 1024) {
+    // バリデーション
+    if (!customerName || !customerPhone || !imageUrls || imageUrls.length === 0) {
       return NextResponse.json(
-        { error: 'ファイルサイズが大きすぎます。16MB以下のファイルを選択してください。' },
+        { error: '必須項目が入力されていません。' },
         { status: 400 }
       );
     }
 
-    const arrayBuffer = await file.arrayBuffer();
-    let buffer: Buffer = Buffer.from(arrayBuffer);
-
-    // HEIC形式の場合はJPEGに変換
-    const mimeType = file.type;
-    let finalMimeType = mimeType;
-    let fileExtension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-
-    if (mimeType === 'image/heic' || mimeType === 'image/heif' || fileExtension === 'heic' || fileExtension === 'heif') {
-      console.log('Converting HEIC to JPEG...');
-      buffer = await sharp(buffer).jpeg({ quality: 90 }).toBuffer();
-      finalMimeType = 'image/jpeg';
-      fileExtension = 'jpg';
+    if (imageUrls.length !== 3) {
+      return NextResponse.json(
+        { error: '画像は3枚アップロードしてください。' },
+        { status: 400 }
+      );
     }
 
-    const fileName = `${crypto.randomUUID()}.${fileExtension}`;
+    // 1. AI診断実行
+    console.log('Performing AI diagnosis...');
+    const diagnosisResult = await performAIDiagnosis(imageUrls);
 
-    // Supabase Storageにアップロード
+    // 2. 4桁の合言葉を生成（衝突しないユニークなコード）
+    const secretCode = await generateUniqueSecretCode();
+
+    // 3. 有効期限を設定（24時間後）
+    const expiresAt = new Date();
+    expiresAt.setHours(expiresAt.getHours() + 24);
+
+    // 4. 診断セッションをデータベースに保存
     const supabaseAdmin = getSupabaseAdmin();
-    const { data, error } = await supabaseAdmin.storage
-      .from('images')
-      .upload(fileName, buffer, {
-        contentType: finalMimeType,
-        upsert: false,
-      });
+    const { data: session, error: insertError } = await supabaseAdmin
+      .from('diagnosis_sessions')
+      .insert({
+        secret_code: secretCode,
+        customer_name: customerName,
+        customer_phone: customerPhone,
+        customer_email: customerEmail || null,
+        damage_locations: diagnosisResult.damageLocations,
+        damage_description: diagnosisResult.damageDescription,
+        severity_score: diagnosisResult.severityScore,
+        estimated_cost_min: diagnosisResult.estimatedCostMin,
+        estimated_cost_max: diagnosisResult.estimatedCostMax,
+        first_aid_cost: diagnosisResult.firstAidCost,
+        insurance_likelihood: diagnosisResult.insuranceLikelihood,
+        recommended_plan: diagnosisResult.recommendedPlan,
+        image_urls: imageUrls,
+        expires_at: expiresAt.toISOString(),
+      })
+      .select()
+      .single();
 
-    if (error) {
-      console.error('Error uploading to Supabase Storage:', error);
+    if (insertError) {
+      console.error('Error inserting diagnosis session:', insertError);
       return NextResponse.json(
-        { error: 'ファイルのアップロードに失敗しました。' },
+        { error: '診断結果の保存に失敗しました。' },
         { status: 500 }
       );
     }
 
-    // 公開URLを取得
-    const { data: urlData } = supabaseAdmin.storage.from('images').getPublicUrl(fileName);
+    // 5. PDFを生成してSupabase Storageにアップロード
+    console.log('Generating PDF...');
+    try {
+      const pdfBuffer = await generatePDF({
+        customerName,
+        diagnosisId: session.id,
+        ...diagnosisResult,
+        imageUrls,
+      });
 
+      const pdfFileName = `diagnosis_${session.id}.pdf`;
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from('pdfs')
+        .upload(pdfFileName, pdfBuffer, {
+          contentType: 'application/pdf',
+          upsert: true,
+        });
+
+      if (uploadError) {
+        console.error('Error uploading PDF:', uploadError);
+        // PDF失敗は致命的ではない（後でリトライ可能）
+      } else {
+        // PDF URLを取得してセッションに保存
+        const { data: pdfUrlData } = supabaseAdmin.storage
+          .from('pdfs')
+          .getPublicUrl(pdfFileName);
+
+        await supabaseAdmin
+          .from('diagnosis_sessions')
+          .update({ pdf_url: pdfUrlData.publicUrl })
+          .eq('id', session.id);
+      }
+    } catch (pdfError) {
+      console.error('PDF generation error (non-fatal):', pdfError);
+      // PDF生成失敗は致命的ではない
+    }
+
+    // 6. 成功レスポンス
     return NextResponse.json({
       success: true,
-      url: urlData.publicUrl,
-      fileName,
+      sessionId: session.id,
+      secretCode,
+      diagnosisResult,
     });
   } catch (error) {
-    console.error('Error in upload API:', error);
+    console.error('Error in diagnosis API:', error);
     return NextResponse.json(
-      { error: 'アップロード中にエラーが発生しました。' },
+      { error: '診断中にエラーが発生しました。' },
       { status: 500 }
     );
   }
