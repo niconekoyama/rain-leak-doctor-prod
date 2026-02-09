@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { supabaseAdmin } from './client';
+import { supabaseAdmin } from './server';
 
 /**
  * 4桁の数字を生成（0000-9999）
