@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import { getSupabase } from '@/lib/supabase/client';
 import { Spinner } from '@/components/Spinner';
 
 interface AuthGuardProps {
@@ -16,8 +15,16 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // ログインページではAuthGuardをスキップ
+    if (pathname === '/admin/login') {
+      setLoading(false);
+      setIsAuthenticated(true);
+      return;
+    }
+
     const checkAuth = async () => {
       try {
+        const { getSupabase } = await import('@/lib/supabase/client');
         const supabase = getSupabase();
         const { data: { session } } = await supabase.auth.getSession();
 
@@ -37,21 +44,32 @@ export function AuthGuard({ children }: AuthGuardProps) {
 
     checkAuth();
 
-    // セッション変更を監視
-    const supabase = getSupabase();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === 'SIGNED_OUT' || !session) {
-          setIsAuthenticated(false);
-          router.replace('/admin/login');
-        } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          setIsAuthenticated(true);
-        }
+    // セッション変更を監視（動的インポートで安全に）
+    let subscription: any = null;
+    const setupListener = async () => {
+      try {
+        const { getSupabase } = await import('@/lib/supabase/client');
+        const supabase = getSupabase();
+        const { data } = supabase.auth.onAuthStateChange(
+          (event, session) => {
+            if (event === 'SIGNED_OUT' || !session) {
+              setIsAuthenticated(false);
+              router.replace('/admin/login');
+            } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+              setIsAuthenticated(true);
+            }
+          }
+        );
+        subscription = data.subscription;
+      } catch (error) {
+        console.error('Failed to setup auth listener:', error);
       }
-    );
+    };
+
+    setupListener();
 
     return () => {
-      subscription.unsubscribe();
+      subscription?.unsubscribe();
     };
   }, [router, pathname]);
 
