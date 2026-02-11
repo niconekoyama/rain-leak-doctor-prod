@@ -36,7 +36,7 @@ export default function CustomerDetailPage() {
   const params = useParams();
   const customerId = params.id as string;
 
-  const [customerData, setCustomerData] = useState<Awaited<ReturnType<typeof getCustomerDetail>>>(null);
+  const [customerData, setCustomerData] = useState<Awaited<ReturnType<typeof getCustomerDetail>> | null>(null);
   const [followUpData, setFollowUpData] = useState<FollowUp | null>(null);
   const [loading, setLoading] = useState(true);
   const [note, setNote] = useState('');
