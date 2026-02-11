@@ -10,13 +10,22 @@ const config: Config = {
     extend: {
       colors: {
         primary: {
-          DEFAULT: '#1e40af',
-          dark: '#1e3a8a',
+          DEFAULT: '#0F4C81',
+          dark: '#0A2540',
+          light: '#1a6bb5',
         },
-        secondary: {
-          DEFAULT: '#0ea5e9',
-          light: '#38bdf8',
+        accent: {
+          DEFAULT: '#00D4FF',
+          dark: '#00b8d9',
+          light: '#33ddff',
         },
+        line: {
+          DEFAULT: '#06C755',
+          dark: '#05b54c',
+        },
+      },
+      fontFamily: {
+        sans: ['Noto Sans JP', 'sans-serif'],
       },
     },
   },
