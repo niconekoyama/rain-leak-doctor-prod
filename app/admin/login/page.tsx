@@ -1,9 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Lock, Mail, Eye, EyeOff, AlertCircle } from 'lucide-react';
-import { getSupabase } from '@/lib/supabase/client';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -12,6 +11,18 @@ export default function AdminLoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [configError, setConfigError] = useState('');
+
+  useEffect(() => {
+    // 環境変数の確認
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !key) {
+      setConfigError(
+        'Supabase環境変数が設定されていません。Vercelの環境変数に NEXT_PUBLIC_SUPABASE_URL と NEXT_PUBLIC_SUPABASE_ANON_KEY を設定してください。'
+      );
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,6 +30,8 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
+      // 動的にインポートしてクライアントサイドでのみ初期化
+      const { getSupabase } = await import('@/lib/supabase/client');
       const supabase = getSupabase();
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email,
@@ -41,8 +54,13 @@ export default function AdminLoginPage() {
         router.push('/admin');
         router.refresh();
       }
-    } catch (err) {
-      setError('ログイン中にエラーが発生しました。もう一度お試しください。');
+    } catch (err: any) {
+      console.error('Login error:', err);
+      if (err?.message?.includes('Supabaseの初期化に失敗')) {
+        setError('システム設定エラー: Supabase環境変数が未設定です。管理者に連絡してください。');
+      } else {
+        setError('ログイン中にエラーが発生しました。もう一度お試しください。');
+      }
       setLoading(false);
     }
   };
@@ -58,6 +76,19 @@ export default function AdminLoginPage() {
           <h1 className="text-2xl font-bold text-slate-900">管理画面ログイン</h1>
           <p className="text-slate-500 mt-2">AI雨漏りドクター 管理システム</p>
         </div>
+
+        {/* 設定エラー表示 */}
+        {configError && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold mb-1">設定エラー</p>
+                <p>{configError}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ログインフォーム */}
         <div className="bg-white rounded-2xl shadow-xl border border-slate-200 p-8">
