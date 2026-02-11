@@ -97,7 +97,7 @@ export default function DiagnosisEditPage() {
   };
 
   const handleRegeneratePDF = () => {
-    toast.info('PDF再発行機能は現在準備中です');
+    toast.success('PDF再発行機能は現在準備中です');
   };
 
   if (loading) {
