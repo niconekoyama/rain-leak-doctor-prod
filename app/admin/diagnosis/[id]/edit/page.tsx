@@ -50,7 +50,7 @@ export default function DiagnosisEditPage() {
       setEstimatedCostMin(d.estimatedCostMin);
       setEstimatedCostMax(d.estimatedCostMax);
       setInsuranceLikelihood(d.insuranceLikelihood);
-      setInsuranceReason(d.insuranceReason);
+      setInsuranceReason(d.insuranceReason || '');
       setRecommendedPlan(d.recommendedPlan);
       setDiagnosisDetails(d.diagnosisDetails);
       setSeverityScore(d.severityScore);
