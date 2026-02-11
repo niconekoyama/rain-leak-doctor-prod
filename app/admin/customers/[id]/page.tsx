@@ -12,7 +12,8 @@ import { Button } from '@/components/Button';
 import { Spinner } from '@/components/Spinner';
 import {
   type TimelineItem, type FollowUp,
-  getCustomerDetail, getCustomerFollowUp
+  getCustomerDetail, getCustomerFollowUp,
+  updateCustomerFollowUp, addFollowUpNote
 } from '@/lib/admin/data';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -44,45 +45,57 @@ export default function CustomerDetailPage() {
   const [nextActionDate, setNextActionDate] = useState('');
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    async function load() {
-      const [detail, followUp] = await Promise.all([
-        getCustomerDetail(customerId),
-        getCustomerFollowUp(customerId),
-      ]);
-      setCustomerData(detail);
-      setFollowUpData(followUp);
-      if (followUp) {
-        setStatus(followUp.status);
-        setNextAction(followUp.nextAction || '');
-        setNextActionDate(followUp.nextActionDate || '');
-      }
-      setLoading(false);
+  const loadData = async () => {
+    const [detail, followUp] = await Promise.all([
+      getCustomerDetail(customerId),
+      getCustomerFollowUp(customerId),
+    ]);
+    setCustomerData(detail);
+    setFollowUpData(followUp);
+    if (followUp) {
+      setStatus(followUp.status);
+      setNextAction(followUp.nextAction || '');
+      setNextActionDate(followUp.nextActionDate || '');
     }
-    load();
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadData();
   }, [customerId]);
 
-  const handleSaveNote = () => {
+  const handleSaveNote = async () => {
     if (!note.trim()) {
       toast.error('メモを入力してください');
       return;
     }
     setSaving(true);
-    // TODO: Phase 3 - Supabaseにメモを保存
-    setTimeout(() => {
-      toast.success('メモを保存しました（デモ）');
+    try {
+      await addFollowUpNote(customerId, note.trim());
+      toast.success('メモを保存しました');
       setNote('');
+      await loadData();
+    } catch (err) {
+      toast.error('メモの保存に失敗しました');
+    } finally {
       setSaving(false);
-    }, 500);
+    }
   };
 
-  const handleUpdateFollowUp = () => {
+  const handleUpdateFollowUp = async () => {
     setSaving(true);
-    // TODO: Phase 3 - Supabaseにフォローアップを保存
-    setTimeout(() => {
-      toast.success('ステータスを更新しました（デモ）');
+    try {
+      await updateCustomerFollowUp(customerId, {
+        status,
+        nextAction: nextAction || undefined,
+        nextActionDate: nextActionDate || undefined,
+      });
+      toast.success('ステータスを更新しました');
+    } catch (err) {
+      toast.error('ステータスの更新に失敗しました');
+    } finally {
       setSaving(false);
-    }, 500);
+    }
   };
 
   if (loading) {
@@ -142,6 +155,12 @@ export default function CustomerDetailPage() {
                 <div className="flex items-center gap-2 text-sm">
                   <Phone className="h-4 w-4 text-slate-400" />
                   <span className="text-slate-700">{customer.phone}</span>
+                </div>
+              )}
+              {customer.address && (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-slate-400">📍</span>
+                  <span className="text-slate-700">{customer.address}</span>
                 </div>
               )}
               {customer.lineUserId && (

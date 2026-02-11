@@ -9,7 +9,7 @@ import { Badge, Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/Ad
 import { Spinner } from '@/components/Spinner';
 import {
   type Stats, type Contact, type Diagnosis, type Appointment,
-  getStats, getContacts, getDiagnoses, getAppointments
+  getDashboardData
 } from '@/lib/admin/data';
 
 export default function AdminDashboard() {
@@ -18,17 +18,22 @@ export default function AdminDashboard() {
   const [diagnoses, setDiagnoses] = useState<Diagnosis[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
-      const [s, c, d, a] = await Promise.all([
-        getStats(), getContacts(), getDiagnoses(), getAppointments()
-      ]);
-      setStats(s);
-      setContacts(c);
-      setDiagnoses(d);
-      setAppointments(a);
-      setLoading(false);
+      try {
+        const data = await getDashboardData();
+        setStats(data.stats);
+        setContacts(data.contacts);
+        setDiagnoses(data.diagnoses);
+        setAppointments(data.appointments);
+      } catch (e: any) {
+        console.error('Dashboard load error:', e);
+        setError(e.message || 'データの取得に失敗しました');
+      } finally {
+        setLoading(false);
+      }
     }
     load();
   }, []);
@@ -37,6 +42,17 @@ export default function AdminDashboard() {
     return (
       <div className="flex items-center justify-center py-20">
         <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-center">
+        <p className="text-red-500 mb-4">{error}</p>
+        <button onClick={() => window.location.reload()} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+          再読み込み
+        </button>
       </div>
     );
   }
@@ -57,13 +73,11 @@ export default function AdminDashboard() {
 
   return (
     <div>
-      {/* ページタイトル */}
       <div className="mb-8">
         <h1 className="text-2xl md:text-3xl font-bold text-slate-900">管理者ダッシュボード</h1>
         <p className="text-slate-500 mt-1">お問い合わせ・AI診断・予約を一元管理</p>
       </div>
 
-      {/* 統計カード */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {statCards.map((card, i) => (
           <div key={i} className="bg-white rounded-xl border border-slate-200 p-5">
@@ -77,7 +91,6 @@ export default function AdminDashboard() {
         ))}
       </div>
 
-      {/* タブ */}
       <Tabs defaultValue="contacts" className="space-y-4">
         <TabsList>
           <TabsTrigger value="contacts">お問い合わせ</TabsTrigger>
@@ -85,7 +98,6 @@ export default function AdminDashboard() {
           <TabsTrigger value="appointments">予約</TabsTrigger>
         </TabsList>
 
-        {/* お問い合わせ一覧 */}
         <TabsContent value="contacts" className="space-y-4">
           <div className="bg-white rounded-xl border border-slate-200">
             <div className="p-5 border-b border-slate-100">
@@ -113,7 +125,6 @@ export default function AdminDashboard() {
           </div>
         </TabsContent>
 
-        {/* AI診断一覧 */}
         <TabsContent value="diagnoses" className="space-y-4">
           <div className="bg-white rounded-xl border border-slate-200">
             <div className="p-5 border-b border-slate-100">
@@ -141,11 +152,12 @@ export default function AdminDashboard() {
                     </Badge>
                   </div>
                   <p className="text-sm text-slate-600 mb-2">{diagnosis.diagnosisDetails}</p>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
                     {diagnosis.insuranceLikelihood === 'high' && (
                       <Badge variant="default">保険適用可能性高</Badge>
                     )}
                     <Badge variant="outline">{diagnosis.recommendedPlan}</Badge>
+                    <Badge variant="secondary">合言葉: {diagnosis.claimCode}</Badge>
                     <Link href={`/admin/diagnosis/${diagnosis.id}/edit`}>
                       <Badge variant="secondary" className="cursor-pointer hover:bg-slate-200">
                         <Eye className="h-3 w-3 mr-1" />
@@ -161,7 +173,6 @@ export default function AdminDashboard() {
           </div>
         </TabsContent>
 
-        {/* 予約一覧 */}
         <TabsContent value="appointments" className="space-y-4">
           <div className="bg-white rounded-xl border border-slate-200">
             <div className="p-5 border-b border-slate-100">
@@ -189,11 +200,16 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-2 text-sm text-slate-600">
-                      <div><span className="font-semibold">第1希望:</span> {appt.firstChoice}</div>
-                      <div><span className="font-semibold">第2希望:</span> {appt.secondChoice}</div>
-                      {appt.aiDiagnosisId && (
+                      <div><span className="font-semibold">希望日:</span> {appt.preferredDate}</div>
+                      <div><span className="font-semibold">希望時間:</span> {appt.preferredTime}</div>
+                      {appt.address && (
                         <div className="col-span-2">
-                          <span className="font-semibold">AI診断ID:</span> {appt.aiDiagnosisId}
+                          <span className="font-semibold">住所:</span> {appt.address}
+                        </div>
+                      )}
+                      {appt.diagnosisSessionId && (
+                        <div className="col-span-2">
+                          <span className="font-semibold">AI診断ID:</span> {appt.diagnosisSessionId}
                         </div>
                       )}
                     </div>

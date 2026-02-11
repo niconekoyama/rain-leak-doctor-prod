@@ -4,25 +4,26 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import {
-  ArrowLeft, Save, FileText, History, AlertTriangle
+  ArrowLeft, Save, FileText, History, AlertTriangle, Image as ImageIcon
 } from 'lucide-react';
 import { Badge, Label, Textarea, Select, SelectOption, toast } from '@/components/AdminUI';
 import { Button } from '@/components/Button';
 import { Spinner } from '@/components/Spinner';
 import {
   type Diagnosis, type DiagnosisEditHistory,
-  getDiagnosisById, getDiagnosisEditHistory
+  getDiagnosisById, getDiagnosisEditHistory, updateDiagnosis
 } from '@/lib/admin/data';
 
 export default function DiagnosisEditPage() {
   const params = useParams();
-  const diagnosisId = parseInt(params.id as string);
+  const diagnosisId = params.id as string;
 
   const [diagnosis, setDiagnosis] = useState<Diagnosis | null>(null);
   const [editHistory, setEditHistory] = useState<DiagnosisEditHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showImages, setShowImages] = useState(false);
 
   // 編集フォームの状態
   const [repairLocation, setRepairLocation] = useState('');
@@ -34,49 +35,69 @@ export default function DiagnosisEditPage() {
   const [diagnosisDetails, setDiagnosisDetails] = useState('');
   const [severityScore, setSeverityScore] = useState(0);
   const [firstAidCost, setFirstAidCost] = useState(0);
+  const [adminStatus, setAdminStatus] = useState('未対応');
   const [editReason, setEditReason] = useState('');
 
-  useEffect(() => {
-    async function load() {
-      const [d, h] = await Promise.all([
-        getDiagnosisById(diagnosisId),
-        getDiagnosisEditHistory(diagnosisId),
-      ]);
-      setDiagnosis(d);
-      setEditHistory(h);
-      if (d) {
-        setRepairLocation(d.repairLocation);
-        setEstimatedCostMin(d.estimatedCostMin);
-        setEstimatedCostMax(d.estimatedCostMax);
-        setInsuranceLikelihood(d.insuranceLikelihood);
-        setInsuranceReason(d.insuranceReason);
-        setRecommendedPlan(d.recommendedPlan);
-        setDiagnosisDetails(d.diagnosisDetails);
-        setSeverityScore(d.severityScore);
-        setFirstAidCost(d.firstAidCost);
-      }
-      setLoading(false);
+  const loadData = async () => {
+    const [d, h] = await Promise.all([
+      getDiagnosisById(diagnosisId),
+      getDiagnosisEditHistory(diagnosisId),
+    ]);
+    setDiagnosis(d);
+    setEditHistory(h);
+    if (d) {
+      setRepairLocation(d.repairLocation);
+      setEstimatedCostMin(d.estimatedCostMin);
+      setEstimatedCostMax(d.estimatedCostMax);
+      setInsuranceLikelihood(d.insuranceLikelihood);
+      setInsuranceReason(d.insuranceReason);
+      setRecommendedPlan(d.recommendedPlan);
+      setDiagnosisDetails(d.diagnosisDetails);
+      setSeverityScore(d.severityScore);
+      setFirstAidCost(d.firstAidCost);
+      setAdminStatus(d.adminStatus);
     }
-    load();
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    loadData();
   }, [diagnosisId]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!editReason.trim()) {
       toast.error('編集理由を入力してください');
       return;
     }
     setSaving(true);
-    // TODO: Phase 3 - Supabaseに保存
-    setTimeout(() => {
-      toast.success('診断情報を更新しました（デモ）');
-      setSaving(false);
+    try {
+      await updateDiagnosis(
+        diagnosisId,
+        {
+          repairLocation,
+          estimatedCostMin,
+          estimatedCostMax,
+          insuranceLikelihood,
+          recommendedPlan,
+          diagnosisDetails,
+          severityScore,
+          firstAidCost,
+          adminStatus,
+        },
+        editReason.trim()
+      );
+      toast.success('診断情報を更新しました');
       setEditReason('');
-    }, 500);
+      await loadData();
+    } catch (err) {
+      toast.error('更新に失敗しました');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleRegeneratePDF = () => {
-    // TODO: Phase 3 - PDF再生成API呼び出し
-    toast.success('PDF再発行リクエストを送信しました（デモ）');
+    toast.info('PDF再発行機能は現在準備中です');
   };
 
   if (loading) {
@@ -98,13 +119,6 @@ export default function DiagnosisEditPage() {
     );
   }
 
-  const insuranceBadge: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
-    high: { label: '高い', variant: 'default' },
-    medium: { label: '中程度', variant: 'secondary' },
-    low: { label: '低い', variant: 'outline' },
-    none: { label: 'なし', variant: 'destructive' },
-  };
-
   return (
     <div>
       {/* ヘッダー */}
@@ -122,7 +136,13 @@ export default function DiagnosisEditPage() {
             </p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
+          {diagnosis.imageUrls && diagnosis.imageUrls.length > 0 && (
+            <Button variant="outline" size="sm" onClick={() => setShowImages(!showImages)}>
+              <ImageIcon className="h-4 w-4 mr-2" />
+              写真 ({diagnosis.imageUrls.length})
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={() => setShowHistory(!showHistory)}>
             <History className="h-4 w-4 mr-2" />
             編集履歴
@@ -133,6 +153,30 @@ export default function DiagnosisEditPage() {
           </Button>
         </div>
       </div>
+
+      {/* アップロード画像表示 */}
+      {showImages && diagnosis.imageUrls && diagnosis.imageUrls.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
+          <h3 className="font-bold text-slate-900 mb-4">アップロード画像</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {diagnosis.imageUrls.map((url, idx) => (
+              <div key={idx} className="relative aspect-video rounded-lg overflow-hidden border border-slate-200">
+                <img
+                  src={url}
+                  alt={`診断画像 ${idx + 1}`}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23f1f5f9" width="100" height="100"/><text x="50" y="55" text-anchor="middle" fill="%2394a3b8" font-size="12">画像なし</text></svg>';
+                  }}
+                />
+                <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-2">
+                  画像 {idx + 1}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* 左カラム: 顧客情報 */}
@@ -165,6 +209,18 @@ export default function DiagnosisEditPage() {
                 <span className="ml-2 font-bold text-[#0F4C81]">{diagnosis.claimCode}</span>
               </div>
             </div>
+          </div>
+
+          {/* 管理ステータス */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="font-bold text-slate-900 mb-4">管理ステータス</h3>
+            <Select value={adminStatus} onValueChange={setAdminStatus} className="w-full">
+              <SelectOption value="未対応">未対応</SelectOption>
+              <SelectOption value="連絡済み">連絡済み</SelectOption>
+              <SelectOption value="対応中">対応中</SelectOption>
+              <SelectOption value="成約">成約</SelectOption>
+              <SelectOption value="失注">失注</SelectOption>
+            </Select>
           </div>
 
           {/* 編集理由 */}

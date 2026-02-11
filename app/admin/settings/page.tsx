@@ -5,7 +5,7 @@ import { Save, Mail, Bell, Shield } from 'lucide-react';
 import { Label, Switch, toast } from '@/components/AdminUI';
 import { Button } from '@/components/Button';
 import { Spinner } from '@/components/Spinner';
-import { type SystemSetting, getSystemSettings } from '@/lib/admin/data';
+import { type SystemSetting, getSystemSettings, updateSystemSetting } from '@/lib/admin/data';
 
 export default function AdminSettings() {
   const [loading, setLoading] = useState(true);
@@ -19,23 +19,46 @@ export default function AdminSettings() {
 
   useEffect(() => {
     async function load() {
-      const settings = await getSystemSettings();
-      const emailSetting = settings.find((s) => s.settingKey === 'notification_email');
-      const emailEnabled = settings.find((s) => s.settingKey === 'email_notifications_enabled');
-      if (emailSetting) setNotificationEmail(emailSetting.settingValue);
-      if (emailEnabled) setEmailNotifications(emailEnabled.settingValue === 'true');
+      try {
+        const settings = await getSystemSettings();
+        const emailSetting = settings.find((s) => s.settingKey === 'notification_email');
+        const emailEnabled = settings.find((s) => s.settingKey === 'email_notifications_enabled');
+        const lineEnabled = settings.find((s) => s.settingKey === 'line_notifications_enabled');
+        const contactAlert = settings.find((s) => s.settingKey === 'new_contact_alert');
+        const diagnosisAlert = settings.find((s) => s.settingKey === 'new_diagnosis_alert');
+        const appointmentAlert = settings.find((s) => s.settingKey === 'new_appointment_alert');
+
+        if (emailSetting) setNotificationEmail(emailSetting.settingValue);
+        if (emailEnabled) setEmailNotifications(emailEnabled.settingValue === 'true');
+        if (lineEnabled) setLineNotifications(lineEnabled.settingValue === 'true');
+        if (contactAlert) setNewContactAlert(contactAlert.settingValue === 'true');
+        if (diagnosisAlert) setNewDiagnosisAlert(diagnosisAlert.settingValue === 'true');
+        if (appointmentAlert) setNewAppointmentAlert(appointmentAlert.settingValue === 'true');
+      } catch (err) {
+        console.error('設定の読み込みに失敗:', err);
+      }
       setLoading(false);
     }
     load();
   }, []);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true);
-    // TODO: Phase 3 - Supabaseに設定を保存
-    setTimeout(() => {
-      toast.success('設定を保存しました（デモ）');
+    try {
+      await Promise.all([
+        updateSystemSetting('notification_email', notificationEmail),
+        updateSystemSetting('email_notifications_enabled', String(emailNotifications)),
+        updateSystemSetting('line_notifications_enabled', String(lineNotifications)),
+        updateSystemSetting('new_contact_alert', String(newContactAlert)),
+        updateSystemSetting('new_diagnosis_alert', String(newDiagnosisAlert)),
+        updateSystemSetting('new_appointment_alert', String(newAppointmentAlert)),
+      ]);
+      toast.success('設定を保存しました');
+    } catch (err) {
+      toast.error('設定の保存に失敗しました');
+    } finally {
       setSaving(false);
-    }, 500);
+    }
   };
 
   if (loading) {
@@ -163,8 +186,8 @@ export default function AdminSettings() {
           </div>
 
           <div className="p-4 bg-slate-50 rounded-lg text-sm text-slate-600">
-            <p>管理画面へのアクセスは、Supabase Authenticationで制御されます。</p>
-            <p className="mt-2">Phase 3（Supabase接続）で認証機能が有効になります。</p>
+            <p>管理画面へのアクセスは、Supabase Authenticationの招待制で制御されています。</p>
+            <p className="mt-2">新しい管理者を追加するには、Supabaseダッシュボードの Authentication &gt; Users から招待してください。</p>
           </div>
         </div>
 

@@ -13,6 +13,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/server';
 import { generateUniqueSecretCode } from '@/lib/supabase/secret-code';
 import { performAIDiagnosis } from '@/lib/openai/diagnosis';
 import { generatePDF } from '@/lib/pdf/generator';
+import { syncCustomer } from '@/lib/supabase/customer-sync';
 
 export async function POST(request: NextRequest) {
   try {
@@ -113,7 +114,19 @@ export async function POST(request: NextRequest) {
       // PDF生成失敗は致命的ではない
     }
 
-    // 6. 成功レスポンス
+    // 6. 顧客情報をcustomersテーブルに自動同期（管理画面用）
+    try {
+      await syncCustomer(supabaseAdmin, {
+        name: customerName,
+        phone: customerPhone,
+        email: customerEmail || undefined,
+      });
+    } catch (syncError) {
+      console.error('Customer sync error (non-fatal):', syncError);
+      // 顧客同期失敗は致命的ではない
+    }
+
+    // 7. 成功レスポンス
     return NextResponse.json({
       success: true,
       sessionId: session.id,
