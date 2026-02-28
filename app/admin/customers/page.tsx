@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { Search, MessageSquare, Brain, Calendar, Eye, Download } from 'lucide-react';
+import { Search, MessageSquare, Brain, Calendar, Eye, Download, RefreshCw } from 'lucide-react';
 import { Badge } from '@/components/AdminUI';
 import { Button } from '@/components/Button';
 import { Spinner } from '@/components/Spinner';
@@ -12,15 +12,67 @@ export default function CustomerManagement() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<{
+    success: boolean;
+    message: string;
+    created?: number;
+    updated?: number;
+    skipped?: number;
+    errors?: string[];
+  } | null>(null);
+
+  const loadCustomers = useCallback(async () => {
+    setLoading(true);
+    const data = await getCustomers();
+    setCustomers(data);
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    async function load() {
-      const data = await getCustomers();
-      setCustomers(data);
-      setLoading(false);
+    loadCustomers();
+  }, [loadCustomers]);
+
+  // 顧客データ一括同期
+  const handleSync = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    setSyncResult(null);
+
+    try {
+      const response = await fetch('/api/admin/customers/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setSyncResult({
+          success: true,
+          message: result.message,
+          created: result.created,
+          updated: result.updated,
+          skipped: result.skipped,
+          errors: result.errors,
+        });
+        // 同期後にデータを再読み込み
+        await loadCustomers();
+      } else {
+        setSyncResult({
+          success: false,
+          message: result.error || '同期に失敗しました',
+        });
+      }
+    } catch (error: any) {
+      setSyncResult({
+        success: false,
+        message: '通信エラーが発生しました: ' + (error?.message || '不明'),
+      });
+    } finally {
+      setSyncing(false);
     }
-    load();
-  }, []);
+  };
 
   // CSVエクスポート
   const exportToCSV = () => {
@@ -70,11 +122,64 @@ export default function CustomerManagement() {
           <h1 className="text-2xl md:text-3xl font-bold text-slate-900">顧客管理</h1>
           <p className="text-slate-500 mt-1">顧客の問い合わせ・診断・予約履歴を統合管理</p>
         </div>
-        <Button variant="primary" size="sm" onClick={exportToCSV}>
-          <Download className="h-4 w-4 mr-2" />
-          CSVエクスポート
-        </Button>
+        <div className="flex gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSync}
+            disabled={syncing}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? '同期中...' : '診断データから同期'}
+          </Button>
+          <Button variant="primary" size="sm" onClick={exportToCSV}>
+            <Download className="h-4 w-4 mr-2" />
+            CSVエクスポート
+          </Button>
+        </div>
       </div>
+
+      {/* 同期結果メッセージ */}
+      {syncResult && (
+        <div className={`mb-6 p-4 rounded-xl border ${
+          syncResult.success
+            ? 'bg-green-50 border-green-200 text-green-800'
+            : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          <div className="flex items-start gap-2">
+            <div className="flex-1">
+              <p className="font-semibold">{syncResult.success ? '同期完了' : '同期エラー'}</p>
+              <p className="text-sm mt-1">{syncResult.message}</p>
+              {syncResult.success && (
+                <div className="flex gap-4 mt-2 text-sm">
+                  <span>新規作成: <strong>{syncResult.created}</strong>件</span>
+                  <span>更新: <strong>{syncResult.updated}</strong>件</span>
+                  <span>スキップ: <strong>{syncResult.skipped}</strong>件</span>
+                </div>
+              )}
+              {syncResult.errors && syncResult.errors.length > 0 && (
+                <div className="mt-2 text-sm">
+                  <p className="font-medium">エラー詳細:</p>
+                  <ul className="list-disc list-inside mt-1">
+                    {syncResult.errors.slice(0, 5).map((err, i) => (
+                      <li key={i}>{err}</li>
+                    ))}
+                    {syncResult.errors.length > 5 && (
+                      <li>...他 {syncResult.errors.length - 5} 件</li>
+                    )}
+                  </ul>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => setSyncResult(null)}
+              className="text-slate-400 hover:text-slate-600"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 検索バー */}
       <div className="bg-white rounded-xl border border-slate-200 p-5 mb-6">
@@ -141,8 +246,24 @@ export default function CustomerManagement() {
             </div>
           </div>
         )) : (
-          <div className="bg-white rounded-xl border border-slate-200 py-12 text-center text-slate-400">
-            {searchQuery ? '検索条件に一致する顧客が見つかりませんでした' : '顧客データがありません'}
+          <div className="bg-white rounded-xl border border-slate-200 py-12 text-center">
+            <div className="text-slate-400 mb-4">
+              {searchQuery ? '検索条件に一致する顧客が見つかりませんでした' : '顧客データがありません'}
+            </div>
+            {!searchQuery && customers.length === 0 && (
+              <div className="text-sm text-slate-500">
+                <p className="mb-3">診断データから顧客情報を自動登録できます。</p>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleSync}
+                  disabled={syncing}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+                  {syncing ? '同期中...' : '診断データから顧客を一括登録'}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>
