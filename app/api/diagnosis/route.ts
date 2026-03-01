@@ -14,6 +14,7 @@ import { generateUniqueSecretCode } from '@/lib/supabase/secret-code';
 import { performAIDiagnosis } from '@/lib/openai/diagnosis';
 import { generatePDF } from '@/lib/pdf/generator';
 import { syncCustomer } from '@/lib/supabase/customer-sync';
+import { notifyNewDiagnosis } from '@/lib/email/notification';
 
 export async function POST(request: NextRequest) {
   try {
@@ -126,7 +127,27 @@ export async function POST(request: NextRequest) {
       // 顧客同期失敗は致命的ではない
     }
 
-    // 7. 成功レスポンス
+    // 7. 管理者にメール通知を送信
+    try {
+      await notifyNewDiagnosis({
+        customerName,
+        customerPhone,
+        customerEmail: customerEmail || undefined,
+        damageLocations: diagnosisResult.damageLocations,
+        estimatedCostMin: diagnosisResult.estimatedCostMin,
+        estimatedCostMax: diagnosisResult.estimatedCostMax,
+        insuranceLikelihood: diagnosisResult.insuranceLikelihood,
+        severityScore: diagnosisResult.severityScore,
+        recommendedPlan: diagnosisResult.recommendedPlan,
+        secretCode,
+        sessionId: session.id,
+      });
+    } catch (emailError) {
+      console.error('Email notification error (non-fatal):', emailError);
+      // メール通知失敗は致命的ではない
+    }
+
+    // 8. 成功レスポンス
     return NextResponse.json({
       success: true,
       sessionId: session.id,
