@@ -47,11 +47,11 @@ export async function performAIDiagnosis(
 
 【PDF用追加項目（各80文字以内・箇条書き3つまで）】
 9. detailedAnalysis: 建物状態の要約。築年数推定と劣化度を1〜2文で。
-10. estimatedCause: 推定原因を箇条書き（最大3つ）。例："・経年劣化による防水層破損\n・外壁クラックからの浸水"
-11. repairComparison: 応急処置と本復旧を1行ずつ比較。例："応急:コーキング3〜5万/2年\n本復旧:屋根葺替15〜30万/15年"
+10. estimatedCause: 推定原因を箇条書き（最大3つ）。例："・経年劣化による防水層破損\\n・外壁クラックからの浸水"
+11. repairComparison: 応急処置と本復旧を1行ずつ比較。例："応急:コーキング3〜5万/2年\\n本復旧:屋根葺替15〜30万/15年"
 12. neglectRisk: 放置した場合のリスクを1〜2文で。
 13. insuranceTips: 保険申請の要点を1〜2文で。
-14. imageFindings: 写真ごとの所見を1行ずつ。例："写真1:天井に水染み30cm\n写真2:外壁クラック0.3mm"
+14. imageFindings: 写真ごとの所見を1行ずつ。例："写真1:天井に水染み30cm\\n写真2:外壁クラック0.3mm"
 
 JSON例:
 {
@@ -73,7 +73,7 @@ JSON例:
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-4o-mini',
       max_tokens: 1500,
       messages: [
         {
@@ -86,7 +86,7 @@ JSON例:
             { type: 'text', text: prompt },
             ...imageUrls.map((url) => ({
               type: 'image_url' as const,
-              image_url: { url },
+              image_url: { url, detail: 'low' as const },
             })),
           ],
         },
