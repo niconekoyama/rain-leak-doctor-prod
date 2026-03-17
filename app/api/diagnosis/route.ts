@@ -8,14 +8,21 @@
  * 1. 4桁の合言葉を即座に生成
  * 2. DBにstatus='processing'で仮保存
  * 3. セッションIDと合言葉を即座に返却（1-2秒以内）
- * 4. バックグラウンドでAI診断→PDF生成→DB更新を実行
+ * 4. after() を使用してバックグラウンドでAI診断→PDF生成→DB更新を実行
  * 
- * ※ Vercel Serverless Functionsでは waitUntil が使えないため、
- *    別のAPIエンドポイント（/api/diagnosis/process）を非同期で呼び出す方式を採用
+ * ※ Next.js 15の after() APIを使用
+ *    Vercelのサーバーレス関数でレスポンス返却後にバックグラウンド処理を実行できる
  */
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
 import { generateUniqueSecretCode } from '@/lib/supabase/secret-code';
+import { performAIDiagnosis } from '@/lib/openai/diagnosis';
+import { generatePDF } from '@/lib/pdf/generator';
+import { syncCustomer } from '@/lib/supabase/customer-sync';
+import { notifyNewDiagnosis } from '@/lib/email/notification';
+
+// Vercel Serverless Functionsの最大実行時間を60秒に設定（Proプラン以上で有効）
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   try {
@@ -77,28 +84,127 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 4. バックグラウンド処理を非同期で開始
-    //    自分自身のサーバーの /api/diagnosis/process を呼び出す
-    //    レスポンスを待たずに即座にクライアントに返す
-    const baseUrl = request.nextUrl.origin;
-    fetch(`${baseUrl}/api/diagnosis/process`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        // 内部呼び出し用のシークレットキー
-        'x-internal-secret': process.env.INTERNAL_API_SECRET || 'internal-secret-key',
-      },
-      body: JSON.stringify({
-        sessionId: session.id,
-        secretCode,
-        customerName,
-        customerPhone,
-        customerEmail,
-        imageUrls,
-      }),
-    }).catch((err) => {
-      // fetch自体のエラーはログに記録するが、クライアントには影響しない
-      console.error('Failed to trigger background processing:', err);
+    // 4. after() を使用してバックグラウンド処理を実行
+    //    レスポンス返却後にVercelが処理を継続する
+    after(async () => {
+      console.log(`[バックグラウンド処理開始] Session: ${session.id}`);
+      const bgSupabase = getSupabaseAdmin();
+
+      try {
+        // 4-1. AI診断を実行
+        console.log('[AI診断] 開始...');
+        const diagnosisResult = await performAIDiagnosis(imageUrls);
+        console.log('[AI診断] 完了:', diagnosisResult.severityScore);
+
+        // 4-2. PDF生成
+        console.log('[PDF生成] 開始...');
+        let pdfUrl: string | null = null;
+        try {
+          const pdfBuffer = await generatePDF({
+            customerName,
+            diagnosisId: session.id,
+            ...diagnosisResult,
+            imageUrls,
+          });
+
+          // 4-3. Supabase Storageにアップロード
+          const pdfFileName = `diagnosis_${session.id}.pdf`;
+          const { error: uploadError } = await bgSupabase.storage
+            .from('pdfs')
+            .upload(pdfFileName, pdfBuffer, {
+              contentType: 'application/pdf',
+              upsert: true,
+            });
+
+          if (uploadError) {
+            console.error('[PDF Storageアップロードエラー]', uploadError);
+          } else {
+            const { data: pdfUrlData } = bgSupabase.storage
+              .from('pdfs')
+              .getPublicUrl(pdfFileName);
+            pdfUrl = pdfUrlData.publicUrl;
+            console.log('[PDF生成] 完了:', pdfUrl);
+          }
+        } catch (pdfError) {
+          console.error('[PDF生成エラー (non-fatal)]', pdfError);
+        }
+
+        // 4-4. DBを更新（診断結果 + PDF URL）
+        const updateData: Record<string, unknown> = {
+          damage_locations: diagnosisResult.damageLocations,
+          damage_description: diagnosisResult.damageDescription,
+          severity_score: diagnosisResult.severityScore,
+          estimated_cost_min: diagnosisResult.estimatedCostMin,
+          estimated_cost_max: diagnosisResult.estimatedCostMax,
+          first_aid_cost: diagnosisResult.firstAidCost,
+          insurance_likelihood: diagnosisResult.insuranceLikelihood,
+          recommended_plan: diagnosisResult.recommendedPlan,
+          detailed_analysis: diagnosisResult.detailedAnalysis,
+          estimated_cause: diagnosisResult.estimatedCause,
+          repair_comparison: diagnosisResult.repairComparison,
+          neglect_risk: diagnosisResult.neglectRisk,
+          insurance_tips: diagnosisResult.insuranceTips,
+          image_findings: diagnosisResult.imageFindings,
+          status: 'completed',
+        };
+
+        if (pdfUrl) {
+          updateData.pdf_url = pdfUrl;
+        }
+
+        const { error: updateError } = await bgSupabase
+          .from('diagnosis_sessions')
+          .update(updateData)
+          .eq('id', session.id);
+
+        if (updateError) {
+          console.error('[DB更新エラー]', updateError);
+          throw updateError;
+        }
+
+        console.log(`[バックグラウンド処理完了] Session: ${session.id}`);
+
+        // 4-5. 顧客情報をcustomersテーブルに自動同期
+        try {
+          await syncCustomer(bgSupabase, {
+            name: customerName,
+            phone: customerPhone,
+            email: customerEmail || undefined,
+          });
+        } catch (syncError) {
+          console.error('[顧客同期エラー (non-fatal)]', syncError);
+        }
+
+        // 4-6. 管理者にメール通知を送信
+        try {
+          await notifyNewDiagnosis({
+            customerName,
+            customerPhone,
+            customerEmail: customerEmail || undefined,
+            damageLocations: diagnosisResult.damageLocations,
+            estimatedCostMin: diagnosisResult.estimatedCostMin,
+            estimatedCostMax: diagnosisResult.estimatedCostMax,
+            insuranceLikelihood: diagnosisResult.insuranceLikelihood,
+            severityScore: diagnosisResult.severityScore,
+            recommendedPlan: diagnosisResult.recommendedPlan,
+            secretCode,
+            sessionId: session.id,
+          });
+        } catch (emailError) {
+          console.error('[メール通知エラー (non-fatal)]', emailError);
+        }
+      } catch (processingError) {
+        console.error(`[バックグラウンド処理エラー] Session: ${session.id}`, processingError);
+
+        // エラー時はステータスを'error'に更新
+        await bgSupabase
+          .from('diagnosis_sessions')
+          .update({
+            status: 'error',
+            damage_description: 'AI診断中にエラーが発生しました。再度お試しください。',
+          })
+          .eq('id', session.id);
+      }
     });
 
     // 5. 即座にレスポンスを返す（1-2秒以内）
