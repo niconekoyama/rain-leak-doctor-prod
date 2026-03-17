@@ -33,6 +33,10 @@ export const supabase = createClient(
     },
   }
 );
+export function getSupabase() {
+  return supabase;
+}
+
 
 // デフォルトエクスポート
 export default supabase;
