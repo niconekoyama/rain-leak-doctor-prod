@@ -139,12 +139,6 @@ export async function POST(request: NextRequest) {
           first_aid_cost: diagnosisResult.firstAidCost,
           insurance_likelihood: diagnosisResult.insuranceLikelihood,
           recommended_plan: diagnosisResult.recommendedPlan,
-          detailed_analysis: diagnosisResult.detailedAnalysis,
-          estimated_cause: diagnosisResult.estimatedCause,
-          repair_comparison: diagnosisResult.repairComparison,
-          neglect_risk: diagnosisResult.neglectRisk,
-          insurance_tips: diagnosisResult.insuranceTips,
-          image_findings: diagnosisResult.imageFindings,
           status: 'completed',
         };
 
