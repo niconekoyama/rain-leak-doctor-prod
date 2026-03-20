@@ -9,6 +9,7 @@ interface CustomerInfo {
   phone?: string;
   email?: string;
   address?: string;
+  buildingAge?: string;
 }
 
 /**
@@ -54,6 +55,7 @@ export async function syncCustomer(
       if (info.name) updateData.name = info.name;
       if (info.email) updateData.email = info.email;
       if (info.address) updateData.address = info.address;
+      if (info.buildingAge) updateData.building_age = info.buildingAge;
 
       await supabase
         .from('customers')
@@ -70,6 +72,7 @@ export async function syncCustomer(
           phone: info.phone || null,
           email: info.email || null,
           address: info.address || null,
+          building_age: info.buildingAge || null,
           status: '未対応',
           follow_up_status: 'new',
         })

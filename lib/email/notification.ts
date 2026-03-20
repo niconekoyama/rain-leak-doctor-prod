@@ -113,6 +113,8 @@ export async function notifyNewDiagnosis(params: {
   customerName: string;
   customerPhone: string;
   customerEmail?: string;
+  customerAddress?: string;
+  customerBuildingAge?: string;
   damageLocations: string;
   estimatedCostMin: number;
   estimatedCostMax: number;
@@ -164,6 +166,18 @@ export async function notifyNewDiagnosis(params: {
           <tr>
             <td style="padding: 8px 12px; background: #f1f5f9; font-weight: bold; border: 1px solid #e2e8f0;">メール</td>
             <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">${params.customerEmail}</td>
+          </tr>
+          ` : ''}
+          ${params.customerAddress ? `
+          <tr>
+            <td style="padding: 8px 12px; background: #f1f5f9; font-weight: bold; border: 1px solid #e2e8f0;">住所</td>
+            <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">${params.customerAddress}</td>
+          </tr>
+          ` : ''}
+          ${params.customerBuildingAge ? `
+          <tr>
+            <td style="padding: 8px 12px; background: #f1f5f9; font-weight: bold; border: 1px solid #e2e8f0;">築年数</td>
+            <td style="padding: 8px 12px; border: 1px solid #e2e8f0;">${params.customerBuildingAge}</td>
           </tr>
           ` : ''}
           <tr>

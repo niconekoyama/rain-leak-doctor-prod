@@ -149,6 +149,7 @@ export async function GET(
       email: customer.email || '',
       phone: customer.phone || '',
       address: customer.address || '',
+      buildingAge: customer.building_age || '',
       lineUserId: customer.line_user_id,
       status: customer.status || '未対応',
       followUpStatus: customer.follow_up_status || 'new',

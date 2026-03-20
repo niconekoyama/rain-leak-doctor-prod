@@ -68,6 +68,7 @@ export type Customer = {
   email: string;
   phone: string;
   address: string;
+  buildingAge: string;
   lineUserId?: string;
   status: string;
   followUpStatus: string;

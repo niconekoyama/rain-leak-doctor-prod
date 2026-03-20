@@ -79,9 +79,9 @@ export default function CustomerManagement() {
     const data = filteredCustomers;
     if (!data || data.length === 0) return;
 
-    const headers = ['ID', '名前', 'メールアドレス', '電話番号', 'お問い合わせ件数', 'AI診断件数', '予約件数', '最終活動日', '登録日'];
+    const headers = ['ID', '名前', 'メールアドレス', '電話番号', '住所', '築年数', 'お問い合わせ件数', 'AI診断件数', '予約件数', '最終活動日', '登録日'];
     const rows = data.map((c) => [
-      c.id, c.name || '', c.email || '', c.phone || '',
+      c.id, c.name || '', c.email || '', c.phone || '', c.address || '', c.buildingAge || '',
       c.contactCount, c.diagnosisCount, c.appointmentCount,
       c.lastActivity ? new Date(c.lastActivity).toLocaleString('ja-JP') : '',
       c.createdAt ? new Date(c.createdAt).toLocaleString('ja-JP') : '',
@@ -102,7 +102,8 @@ export default function CustomerManagement() {
     return (
       c.name?.toLowerCase().includes(q) ||
       c.email?.toLowerCase().includes(q) ||
-      c.phone?.toLowerCase().includes(q)
+      c.phone?.toLowerCase().includes(q) ||
+      c.address?.toLowerCase().includes(q)
     );
   });
 
@@ -213,6 +214,8 @@ export default function CustomerManagement() {
                 <div className="grid md:grid-cols-2 gap-2 text-sm text-slate-500 mb-4">
                   {customer.email && <div>📧 {customer.email}</div>}
                   {customer.phone && <div>📞 {customer.phone}</div>}
+                  {customer.address && <div>📍 {customer.address}</div>}
+                  {customer.buildingAge && <div>🏠 築{customer.buildingAge}</div>}
                 </div>
 
                 <div className="flex flex-wrap gap-4 text-sm">

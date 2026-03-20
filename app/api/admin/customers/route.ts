@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     ] = await Promise.all([
       supabase
         .from('customers')
-        .select('id, name, email, phone, address, line_user_id, status, follow_up_status, next_action, next_action_date, notes, updated_at, created_at', { count: 'exact' })
+        .select('id, name, email, phone, address, building_age, line_user_id, status, follow_up_status, next_action, next_action_date, notes, updated_at, created_at', { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(offset, offset + limit - 1),
       // 2. 関連テーブルの電話・メール情報を一括取得（カウント用）
@@ -76,6 +76,7 @@ export async function GET(request: NextRequest) {
         email: c.email || '',
         phone: c.phone || '',
         address: c.address || '',
+        buildingAge: c.building_age || '',
         lineUserId: c.line_user_id,
         status: c.status || '未対応',
         followUpStatus: c.follow_up_status || 'new',

@@ -26,6 +26,8 @@ export default function DiagnosisPage() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
+  const [customerBuildingAge, setCustomerBuildingAge] = useState('');
   const [images, setImages] = useState<File[]>([]);
 
   // 結果
@@ -61,6 +63,14 @@ export default function DiagnosisPage() {
     }
     if (!customerPhone.trim()) {
       setError('電話番号を入力してください。');
+      return;
+    }
+    if (!customerAddress.trim()) {
+      setError('住所を入力してください。');
+      return;
+    }
+    if (!customerBuildingAge) {
+      setError('築年数を選択してください。');
       return;
     }
     if (images.length !== 3) {
@@ -104,6 +114,8 @@ export default function DiagnosisPage() {
           customerName,
           customerPhone,
           customerEmail,
+          customerAddress,
+          customerBuildingAge,
           imageUrls,
         }),
       });
@@ -368,6 +380,42 @@ export default function DiagnosisPage() {
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="example@email.com"
             />
+          </div>
+
+          {/* 住所 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              住所 <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={customerAddress}
+              onChange={(e) => setCustomerAddress(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="大阪府大阪市旭区高殿2-12-6"
+              required
+            />
+          </div>
+
+          {/* 築年数 */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              築年数 <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={customerBuildingAge}
+              onChange={(e) => setCustomerBuildingAge(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+              required
+            >
+              <option value="">選択してください</option>
+              <option value="5年未満">5年未満</option>
+              <option value="5〜10年">5〜10年</option>
+              <option value="10〜20年">10〜20年</option>
+              <option value="20〜30年">20〜30年</option>
+              <option value="30年以上">30年以上</option>
+              <option value="不明">不明</option>
+            </select>
           </div>
 
           {/* 画像アップロード */}

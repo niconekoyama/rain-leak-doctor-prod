@@ -163,6 +163,12 @@ export default function CustomerDetailPage() {
                   <span className="text-slate-700">{customer.address}</span>
                 </div>
               )}
+              {customer.buildingAge && (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-slate-400">🏠</span>
+                  <span className="text-slate-700">築{customer.buildingAge}</span>
+                </div>
+              )}
               {customer.lineUserId && (
                 <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                   LINE連携済み
