@@ -29,6 +29,8 @@ export async function GET(
       name: data.customer_name || '',
       phone: data.customer_phone || '',
       email: data.customer_email || '',
+      address: data.customer_address || '',
+      buildingAge: data.building_age || '',
       repairLocation: data.damage_locations || result.repairLocation || '',
       estimatedCostMin: data.estimated_cost_min || result.estimatedCostMin || 0,
       estimatedCostMax: data.estimated_cost_max || result.estimatedCostMax || 0,

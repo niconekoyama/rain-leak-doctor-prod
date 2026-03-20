@@ -198,6 +198,18 @@ export default function DiagnosisEditPage() {
                   <span className="ml-2 font-medium text-slate-900">{diagnosis.email}</span>
                 </div>
               )}
+              {diagnosis.address && (
+                <div>
+                  <span className="text-slate-500">住所:</span>
+                  <span className="ml-2 font-medium text-slate-900">{diagnosis.address}</span>
+                </div>
+              )}
+              {diagnosis.buildingAge && (
+                <div>
+                  <span className="text-slate-500">築年数:</span>
+                  <span className="ml-2 font-medium text-slate-900">{diagnosis.buildingAge}</span>
+                </div>
+              )}
               <div>
                 <span className="text-slate-500">診断日:</span>
                 <span className="ml-2 font-medium text-slate-900">
