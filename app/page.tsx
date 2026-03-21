@@ -8,21 +8,21 @@ import {
   Twitter, Instagram, Youtube, QrCode
 } from 'lucide-react';
 
-/* ─── CDN画像URL ─── */
-const DROCO_ICON_URL = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663225698766/ELNpEvIEfboRmDZK.JPG";
-const LIXIL_BADGE_URL = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663225698766/wfZmTUcclzuIfRlQ.jpg";
-const APP_SCREEN_URL = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663225698766/oylOHNGclDdJmgSY.png";
-const LINE_QR_URL = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663225698766/sinUyDDoZiwkuSTf.png";
+/* ─── ローカル画像パス ─── */
+const DROCO_ICON_URL = "/images/droco-icon.jpg";
+const LIXIL_BADGE_URL = "/images/lixil-badge.jpg";
+const APP_SCREEN_URL = "/images/app-screen.png";
+const LINE_QR_URL = "/images/line-qr.png";
 const LINE_URL = "https://lin.ee/ioKJtwL";
 
 /* 事例画像 */
-const CASE1_IMG = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663225698766/exsGOXOrEctfStxs.jpg";
-const CASE2_IMG = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663225698766/hltxasSSptiKyZMB.jpg";
+const CASE1_IMG = "/images/case1.jpg";
+const CASE2_IMG = "/images/case2.jpg";
 
 /* 技術画像 */
-const TECH1_IMG = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663225698766/RciaIHwWHJzzLEMm.jpg";
-const TECH2_IMG = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663225698766/LVAFAVIkukHzqdOP.jpg";
-const TECH3_IMG = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663225698766/RCnTtXAwkPEPRuOc.jpg";
+const TECH1_IMG = "/images/tech1.jpg";
+const TECH2_IMG = "/images/tech2.jpg";
+const TECH3_IMG = "/images/tech3.jpg";
 
 /* ─── カウントアップフック ─── */
 function useCountUp({ end, duration = 2000, decimals = 0 }: { end: number; duration?: number; decimals?: number }) {
@@ -163,7 +163,7 @@ export default function Home() {
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute -top-[20%] -left-[10%] w-[70%] h-[70%] bg-accent/10 rounded-full blur-[120px]" />
           <div className="absolute bottom-[10%] right-[10%] w-[50%] h-[50%] bg-accent/5 rounded-full blur-[100px]" />
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
+          <div className="absolute inset-0 bg-[url('/images/pattern-cubes.png')] opacity-10"></div>
           <div className="absolute inset-0 bg-gradient-to-b from-transparent to-primary"></div>
         </div>
 
@@ -274,7 +274,7 @@ export default function Home() {
 
       {/* ═══════════ Pricing Section ═══════════ */}
       <section id="pricing" className="py-24 bg-slate-900 text-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20"></div>
+        <div className="absolute inset-0 bg-[url('/images/pattern-carbon-fibre.png')] opacity-20"></div>
         <div className="container relative z-10">
           <div className="text-center mb-16">
             <span className="inline-block bg-accent text-primary px-3 py-1 rounded-full text-sm font-bold mb-4">明朗会計</span>
