@@ -27,7 +27,7 @@ export const maxDuration = 60;
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { customerName, customerPhone, customerEmail, imageUrls } = body;
+    const { customerName, customerPhone, customerEmail, customerAddress, customerBuildingAge, imageUrls } = body;
 
     // バリデーション
     if (!customerName || !customerPhone || !imageUrls || imageUrls.length === 0) {
@@ -60,6 +60,8 @@ export async function POST(request: NextRequest) {
         customer_name: customerName,
         customer_phone: customerPhone,
         customer_email: customerEmail || null,
+        customer_address: customerAddress || null,
+        building_age: customerBuildingAge || null,
         image_urls: imageUrls,
         expires_at: expiresAt.toISOString(),
         // 仮の値（バックグラウンド処理で更新される）
@@ -164,6 +166,8 @@ export async function POST(request: NextRequest) {
             name: customerName,
             phone: customerPhone,
             email: customerEmail || undefined,
+            address: customerAddress || undefined,
+            buildingAge: customerBuildingAge || undefined,
           });
         } catch (syncError) {
           console.error('[顧客同期エラー (non-fatal)]', syncError);
@@ -175,6 +179,8 @@ export async function POST(request: NextRequest) {
             customerName,
             customerPhone,
             customerEmail: customerEmail || undefined,
+            customerAddress: customerAddress || undefined,
+            customerBuildingAge: customerBuildingAge || undefined,
             damageLocations: diagnosisResult.damageLocations,
             estimatedCostMin: diagnosisResult.estimatedCostMin,
             estimatedCostMax: diagnosisResult.estimatedCostMax,
