@@ -82,8 +82,16 @@ export default function Home() {
       <header className={`fixed top-0 z-50 w-full transition-all duration-300 border-b ${isScrolled ? 'h-16 bg-white/90 backdrop-blur-md shadow-sm border-slate-200' : 'h-20 bg-transparent border-transparent'}`}>
         <div className="container flex h-full items-center justify-between">
           <Link href="/" className="flex items-center gap-2">
-            <div className={`flex items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary-dark text-white font-bold ${isScrolled ? 'w-8 h-8 text-xs' : 'w-10 h-10 text-sm'}`}>
-              AI
+            <div className={`flex items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary-dark text-white ${isScrolled ? 'w-8 h-8' : 'w-10 h-10'}`}>
+              <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className={`${isScrolled ? 'w-5 h-5' : 'w-6 h-6'}`}>
+                {/* 家の屋根 */}
+                <path d="M20 4L3 18h5v14h24V18h5L20 4z" fill="none" stroke="white" strokeWidth="2.5" strokeLinejoin="round" />
+                {/* 傘 */}
+                <path d="M20 14c-5 0-9 3.5-9 8h3c0-1.5 1-3 3-3s3 1.5 3 3v6" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M20 14c5 0 9 3.5 9 8h-3c0-1.5-1-3-3-3" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                {/* 傘の柄の先端 */}
+                <path d="M20 28c-1.5 0-2.5-1-2.5-2" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" />
+              </svg>
             </div>
             <span className={`font-bold tracking-tight ${isScrolled ? 'text-lg text-primary' : 'text-xl text-white'}`}>
               雨漏りドクター
@@ -256,13 +264,47 @@ export default function Home() {
 
           <div className="grid md:grid-cols-3 gap-8">
             {[
-              { Icon: CheckCircle, title: "必要な工事だけ", desc: "過剰な提案は一切しません。AI診断と現地調査で根拠を明示し、本当に必要な箇所だけを修繕します。" },
-              { Icon: Shield, title: "最適な手法だけ", desc: "ドローンは必要時のみ。サーモカメラ、散水試験など、建物に応じた最適な調査手法を選択します。" },
-              { Icon: Camera, title: "証拠が残る", desc: "赤外線画像・散水動画・報告書で全て記録。保険申請にも使える詳細な証拠を提供します。" }
+              {
+                icon: (
+                  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-7 w-7">
+                    {/* クリップボードにチェックマーク - 必要な工事だけ */}
+                    <rect x="6" y="4" width="20" height="26" rx="2" stroke="white" strokeWidth="2.5" fill="none" />
+                    <rect x="11" y="2" width="10" height="4" rx="1" stroke="white" strokeWidth="2" fill="white" />
+                    <path d="M11 17l3.5 3.5L21 13" stroke="white" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ),
+                title: "必要な工事だけ", desc: "過剰な提案は一切しません。AI診断と現地調査で根拠を明示し、本当に必要な箇所だけを修繕します。"
+              },
+              {
+                icon: (
+                  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-7 w-7">
+                    {/* レンチとスパナ - 最適な手法だけ */}
+                    <path d="M8 24l10-10" stroke="white" strokeWidth="2.8" strokeLinecap="round" />
+                    <path d="M5.5 26.5a2 2 0 002.8 0l1.4-1.4-2.8-2.8-1.4 1.4a2 2 0 000 2.8z" fill="white" />
+                    <path d="M22 4a6 6 0 00-5.5 8.3L10 19l2.7 2.7 6.5-6.5A6 6 0 1022 4z" stroke="white" strokeWidth="2.5" fill="none" strokeLinejoin="round" />
+                    <circle cx="22" cy="10" r="2" fill="white" />
+                  </svg>
+                ),
+                title: "最適な手法だけ", desc: "ドローンは必要時のみ。サーモカメラ、散水試験など、建物に応じた最適な調査手法を選択します。"
+              },
+              {
+                icon: (
+                  <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-7 w-7">
+                    {/* ファイルにカメラ - 証拠が残る */}
+                    <path d="M6 4h14l6 6v18a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2z" stroke="white" strokeWidth="2.5" fill="none" strokeLinejoin="round" />
+                    <path d="M20 4v6h6" stroke="white" strokeWidth="2.5" strokeLinejoin="round" />
+                    <circle cx="15" cy="20" r="4" stroke="white" strokeWidth="2.2" fill="none" />
+                    <circle cx="15" cy="20" r="1.5" fill="white" />
+                    <rect x="10" y="15" width="10" height="10" rx="1.5" stroke="white" strokeWidth="1.8" fill="none" />
+                    <path d="M13 15l1-2h4l1 2" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
+                  </svg>
+                ),
+                title: "証拠が残る", desc: "赤外線画像・散水動画・報告書で全て記録。保険申請にも使える詳細な証拠を提供します。"
+              }
             ].map((item, i) => (
               <div key={i} className="bg-slate-50 rounded-xl p-8 shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border border-slate-100">
                 <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center mb-4 shadow-md shadow-primary/20">
-                  <item.Icon className="h-7 w-7 text-white" />
+                  {item.icon}
                 </div>
                 <h3 className="text-xl font-bold text-primary mb-3">{item.title}</h3>
                 <p className="text-slate-600 leading-relaxed">{item.desc}</p>
