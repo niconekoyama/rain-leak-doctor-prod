@@ -157,7 +157,7 @@ export default function Home() {
                 <Link href="/diagnosis" className="flex items-center justify-center w-full px-6 py-3 rounded-md bg-accent text-primary font-bold text-lg">
                   <Camera className="h-5 w-5 mr-2" /> AI診断を始める
                 </Link>
-                <a href={LINE_URL} className="flex items-center justify-center w-full px-6 py-3 rounded-md border-2 border-line text-line font-bold text-lg">
+                <a href={LINE_URL} className="flex items-center justify-center w-full px-6 py-3 rounded-md bg-line text-white font-bold text-lg hover:bg-line-dark transition-colors">
                   LINEで相談
                 </a>
               </div>
@@ -201,7 +201,7 @@ export default function Home() {
                   <Camera className="h-5 w-5 mr-2" />
                   無料でAI診断を試す
                 </Link>
-                <a href={LINE_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center h-14 px-8 bg-transparent text-white border border-white/30 hover:bg-white/10 text-lg font-bold rounded-full transition-colors">
+                <a href={LINE_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center h-14 px-8 bg-line text-white hover:bg-line-dark text-lg font-bold rounded-full shadow-[0_0_20px_rgba(6,199,85,0.3)] hover:shadow-[0_0_30px_rgba(6,199,85,0.5)] transition-all transform hover:-translate-y-1">
                   <MessageCircle className="h-5 w-5 mr-2" />
                   LINEで相談
                 </a>
