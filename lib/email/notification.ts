@@ -87,7 +87,7 @@ async function sendEmail(params: {
 
   try {
     const { data, error } = await resend.emails.send({
-      from: 'AI雨漏りドクター <onboarding@resend.dev>',
+      from: 'AI雨漏りドクター <info@loki-drone.com>',
       to: params.to,
       subject: params.subject,
       html: params.html,
